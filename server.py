@@ -26,9 +26,9 @@ def load_metadata():
         doc.ReadFromStream(f)
     container = doc.root.DataServices['InfluxDBSchema.InfluxDB']
     container['DatabaseSet'].bind(InfluxDatabaseCollection)
-    container['DatabaseSet'].bind_navigation('Measurements', DatabaseMeasurements)
-    container['MeasurementSet'].bind_navigation('Database', InfluxDatabaseCollection)
-    container['MeasurementSet'].bind_navigation('Points', MeasurementPoints)
+    container['DatabaseSet'].BindNavigation('Measurements', DatabaseMeasurements)
+    container['MeasurementSet'].BindNavigation('Database', InfluxDatabaseCollection)
+    container['MeasurementSet'].BindNavigation('Points', MeasurementPoints)
     return doc
 
 
