@@ -203,19 +203,17 @@ class MeasurementPoints(NavigationCollection):
             yield e
 
     def __getitem__(self, item):
-        print(item)
-        measurement_name = self.from_entity['Name'].value
-        db_name = 'kck_thermo' #TODO: self.from_entity['Database']['Name'].value
+        db_name, measurement_name, timestamp = item.split('.')
         client.switch_database(db_name)
-        q = "SELECT * FROM %s WHERE time='%sZ'" % (measurement_name, item['time'])
-        print(q)
+        q = "SELECT * FROM %s WHERE time='%sZ'" % (measurement_name, timestamp)
         result = client.query(q)
-        fields = get_tags_and_field_keys(measurement_name)
+        fields = get_tags_and_field_keys(measurement_name, db_name)
         if result is not None:
             m = result[measurement_name].next()
-            e = self.new_entity()
-            #format: 2016-10-22T13:50:00Z
+            m_key = '.'.join((db_name, measurement_name, m['time']))
             t = datetime.datetime.strptime(m['time'], '%Y-%m-%dT%H:%M:%SZ')
+            e = self.new_entity()
+            e['Key'].set_from_value(m_key)
             e['time'].set_from_value(t)
             for f in fields:
                 e[f].set_from_value(m[f])
