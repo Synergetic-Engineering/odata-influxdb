@@ -7,7 +7,7 @@ This project allows you to use the [OData REST API](http://www.odata.org/) to ac
 
 python: Currently requires Python 2.
 
-[pyslet](https://github.com/swl10/pyslet): The OData functionality from the pyslet project is used in this project. 
+[pyslet](https://github.com/swl10/pyslet): The OData functionality from the pyslet project is used in this project.
 
 ## Usage:
 
@@ -20,7 +20,7 @@ INFLUXDB_DSN = 'influxdb://<user>:<pass>@fqdn'
 
 Start your odata endpoint server with `python server.py`.
 
-Point an OData browser to `http://hostname:8080/Databases('kck_thermo')/Measurements('thermo')/Points`
+Point an OData browser to `http://hostname:8080/DatabaseSet('kck_thermo')/Measurements('thermo')/Points`
 
 ## Tests:
 

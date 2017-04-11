@@ -57,7 +57,7 @@ class TestInfluxOData(unittest.TestCase):
                 self.assertIsInstance(db, edm.Entity)
                 m = db['Measurements']
                 self.assertTrue(db['Measurements'].isCollection)
-                with db['Measurements'].open() as measurements:
+                with db['Measurements'].OpenCollection() as measurements:
                     for m in measurements:
                         self.assertIsInstance(m, unicode)
                     for m in measurements.itervalues():
@@ -88,7 +88,7 @@ class TestClient(unittest.TestCase):
 
     def testDatabaseEndpoint(self):
         c = Client('http://localhost:8080')
-        f = c.feeds['DatabaseSet'].open()
+        f = c.feeds['DatabaseSet'].OpenCollection()
         self.assertGreater(len(f), 0)
         for db in f.itervalues():
             self.assertIsInstance(db['Name'].value, unicode)
@@ -96,7 +96,7 @@ class TestClient(unittest.TestCase):
         self.assertIsInstance(internal, core.Entity)
         measurements = internal['Measurements']
         self.assertTrue(measurements.isCollection)
-        with measurements.open() as m:
+        with measurements.OpenCollection() as m:
             cq = m['cq']
         #self.assertGreater(len(f), 0)
         #for m in measurements:
