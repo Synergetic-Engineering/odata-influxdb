@@ -225,17 +225,6 @@ class MeasurementPoints(NavigationCollection):
             raise KeyError('database %s does not contain measurement: %s' % (db_name, item))
 
     def set_page(self, top, skip=0, skiptoken=None):
-        """Sets the page parameters that determine the next page
-        returned by :py:meth:`iterpage`.
-
-        The skip and top query options are integers which determine the
-        number of entities returned (top) and the number of entities
-        skipped (skip).
-
-        *skiptoken* is an opaque token previously obtained from a call
-        to :py:meth:`next_skiptoken` on a similar collection which
-        provides an index into collection prior to any additional *skip*
-        being applied."""
         self.top = top or self.topmax or 10 # a None value for top causes the default iterpage method to set a skiptoken
         self.skip = skip
         self.skiptoken = skiptoken
