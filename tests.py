@@ -62,7 +62,7 @@ class TestInfluxOData(unittest.TestCase):
                         self.assertIsInstance(m, unicode)
                     for m in measurements.itervalues():
                         self.assertRaises(TypeError, lambda: m['Database']['Name'].value)
-                        m_db = m['Database'].get_entity()
+                        m_db = m['Database'].GetEntity()
                         self.assertIsNotNone(m_db)
                         self.assertEqual(m_db['Name'].value, db['Name'].value)
 
