@@ -1,0 +1,3 @@
+pyslet
+influxdb
+functools32

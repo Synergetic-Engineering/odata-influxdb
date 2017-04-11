@@ -87,3 +87,4 @@ ENV/
 
 # Rope project settings
 .ropeproject
+/influxdb_dal/config.py
