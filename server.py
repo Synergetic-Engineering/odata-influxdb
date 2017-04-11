@@ -1,6 +1,6 @@
 import pyslet.odata2.metadata as edmx
 from pyslet.odata2.server import ReadOnlyServer
-from influxdb_dal.TimeSeriesCollection import InfluxDatabaseCollection, DatabaseMeasurements, MeasurementPoints
+from influxdb_dal.TimeSeriesCollection import InfluxDatabaseCollection, DatabaseMeasurements, MeasurementPoints, MeasurementCollection
 from influxdb_dal.TimeSeriesCollection import MeasurementDatabase
 
 SERVICE_PORT = 8080
@@ -27,6 +27,7 @@ def load_metadata():
         doc.ReadFromStream(f)
     container = doc.root.DataServices['InfluxDBSchema.InfluxDB']
     container['DatabaseSet'].bind(InfluxDatabaseCollection)
+    container['MeasurementSet'].bind(MeasurementCollection)
     container['DatabaseSet'].BindNavigation('Measurements', DatabaseMeasurements)
     container['MeasurementSet'].BindNavigation('Database', MeasurementDatabase)
     container['MeasurementSet'].BindNavigation('Points', MeasurementPoints)

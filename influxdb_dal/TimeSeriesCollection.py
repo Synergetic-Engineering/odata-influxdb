@@ -21,6 +21,7 @@ def get_tags_and_field_keys(measurement_name, db_name=None):
 class InfluxDatabaseCollection(EntityCollection):
     def __init__(self, *args, **kwargs):
         super(InfluxDatabaseCollection, self).__init__(*args, **kwargs)
+        self.topmax = 100
 
     def itervalues(self):
         return self.order_entities(
@@ -49,11 +50,74 @@ class InfluxDatabaseCollection(EntityCollection):
         else:
             raise KeyError('database does not exist: %s' % item)
 
+    def set_page(self, top, skip=0, skiptoken=None):
+        self.top = top or self.topmax or 10# a None value for top causes the default iterpage method to set a skiptoken
+        self.skip = skip
+        self.skiptoken = skiptoken
+        self.nextSkiptoken = None
+
+
+class MeasurementCollection(EntityCollection):
+    def __init__(self, *args, **kwargs):
+        super(MeasurementCollection, self).__init__(*args, **kwargs)
+        self.topmax = 100
+
+    def itervalues(self):
+        return self.order_entities(
+            self.expand_entities(self.filter_entities(
+                self.generate_entities())))
+
+    def generate_entities(self):
+        """list all databases"""
+        db_result = client.get_list_database()
+        for db_name in db_result:
+            client.switch_database(db_name)
+            m_result = client.query('SHOW MEASUREMENTS')
+            for m in m_result['measurements']:
+                measurement_name = m['name']
+                m_key = '.'.join(db_name, measurement_name)
+                e = self.new_entity()
+                e['Key'].set_from_value(m_key)
+                e['Name'].set_from_value(measurement_name)
+                e['DatabaseName'].set_from_value(db_name)
+                e.exists = True
+                yield e
+
+    def __getitem__(self, item):
+        db_name, measurement_name = item.split('.')
+        client.switch_database(db_name)
+        rs = client.query('SHOW MEASUREMENTS WITH MEASUREMENT =~ /%s/' % measurement_name)
+        if rs:
+            e = self.new_entity()
+            e['Key'].set_from_value(item)
+            e['Name'].set_from_value(measurement_name)
+            e['DatabaseName'].set_from_value(db_name)
+            e.exists = True
+            if self.check_filter(e):
+                if self.expand or self.select:
+                    e.expand(self.expand, self.select)
+                return e
+        else:
+            raise KeyError('measurement does not exist: %s' % item)
+
+    def set_page(self, top, skip=0, skiptoken=None):
+        self.top = top or self.topmax or 10# a None value for top causes the default iterpage method to set a skiptoken
+        self.skip = skip
+        self.skiptoken = skiptoken
+        self.nextSkiptoken = None
+
 
 class DatabaseMeasurements(NavigationCollection):
     def __init__(self, *args, **kwargs):
-        self.from_entity = kwargs['from_entity']
         super(NavigationCollection, self).__init__(*args, **kwargs)
+        self.from_entity = kwargs['from_entity']
+        self.topmax = 100
+
+    def set_page(self, top, skip=0, skiptoken=None):
+        self.top = top or self.topmax or 10 # a None value for top causes the default iterpage method to set a skiptoken
+        self.skip = skip
+        self.skiptoken = skiptoken
+        self.nextSkiptoken = None
 
     def itervalues(self):
         return self.order_entities(
@@ -67,20 +131,25 @@ class DatabaseMeasurements(NavigationCollection):
         client.switch_database(db_name)
         result = client.query("SHOW MEASUREMENTS")
         for m in result['measurements']:
+            m_key = '.'.join((db_name, m['name']))
             e = self.new_entity()
+            e['Key'].set_from_value(m_key)
             e['Name'].set_from_value(m['name'])
             e['DatabaseName'].set_from_value(self.from_entity['Name'])
             e.exists = True
             yield e
 
     def __getitem__(self, item):
-        db_name = self.from_entity['Name'].value
+        db_name, measurement_name = item.split('.')
         client.switch_database(db_name)
         result = client.query("SHOW MEASUREMENTS")
-        m = next((m for m in result['measurements'] if m['name'] == item), None)
+        m = next((m for m in result['measurements'] if m['name'] == measurement_name), None)
+        m_key = item
         if m is not None:
             e = self.new_entity()
-            e['Name'].set_from_value(item)
+            e['Key'].set_from_value(item)
+            e['Name'].set_from_value(measurement_name)
+            e['DatabaseName'].set_from_value(db_name)
             e.exists = True
             return e
         else:
@@ -106,9 +175,9 @@ class MeasurementDatabase(NavigationCollection):
 
 class MeasurementPoints(NavigationCollection):
     def __init__(self, *args, **kwargs):
-        self.from_entity = kwargs['from_entity']
-
         super(NavigationCollection, self).__init__(*args, **kwargs)
+        self.from_entity = kwargs['from_entity']
+        self.topmax = 100
 
     def itervalues(self):
         return self.order_entities(
@@ -118,15 +187,15 @@ class MeasurementPoints(NavigationCollection):
         )
 
     def generate_entities(self):
-        measurement_name = self.from_entity['Name'].value
-        db_name = 'kck_thermo' #Todo: self.from_entity['Database']['Name'].value
+        db_name, measurement_name = self.from_entity['Key'].value.split('.')
         client.switch_database(db_name)
         result = client.query("SELECT * FROM %s" % measurement_name)
         fields = get_tags_and_field_keys(measurement_name)
         for m in result[measurement_name]:
-            e = self.new_entity()
-            #format: 2016-10-22T13:50:00Z
+            m_key = '.'.join((db_name, measurement_name, m['time']))
             t = datetime.datetime.strptime(m['time'], '%Y-%m-%dT%H:%M:%SZ')
+            e = self.new_entity()
+            e['Key'].set_from_value(m_key)
             e['time'].set_from_value(t)
             for f in fields:
                 e[f].set_from_value(m[f])
@@ -154,3 +223,20 @@ class MeasurementPoints(NavigationCollection):
             return e
         else:
             raise KeyError('database %s does not contain measurement: %s' % (db_name, item))
+
+    def set_page(self, top, skip=0, skiptoken=None):
+        """Sets the page parameters that determine the next page
+        returned by :py:meth:`iterpage`.
+
+        The skip and top query options are integers which determine the
+        number of entities returned (top) and the number of entities
+        skipped (skip).
+
+        *skiptoken* is an opaque token previously obtained from a call
+        to :py:meth:`next_skiptoken` on a similar collection which
+        provides an index into collection prior to any additional *skip*
+        being applied."""
+        self.top = top or self.topmax or 10 # a None value for top causes the default iterpage method to set a skiptoken
+        self.skip = skip
+        self.skiptoken = skiptoken
+        self.nextSkiptoken = None

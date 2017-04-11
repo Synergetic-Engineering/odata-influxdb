@@ -36,7 +36,7 @@ class TestInfluxOData(unittest.TestCase):
         thermo = collection['kck_thermo']
         self.assertEqual(thermo['Name'], 'kck_thermo')
         with thermo['Measurements'].OpenCollection() as measurements:
-            t = measurements['thermo']
+            t = measurements['kck_thermo.thermo']
             self.assertIsNotNone(t)
             with t['Points'].OpenCollection() as points:
                 p_list = list(points.itervalues())
@@ -97,7 +97,7 @@ class TestClient(unittest.TestCase):
         measurements = internal['Measurements']
         self.assertTrue(measurements.isCollection)
         with measurements.OpenCollection() as m:
-            cq = m['cq']
+            cq = m['_internal.cq']
         #self.assertGreater(len(f), 0)
         #for m in measurements:
         #    print m
