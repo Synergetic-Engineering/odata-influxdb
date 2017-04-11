@@ -1,7 +1,7 @@
 import datetime
 
 from functools32 import lru_cache
-from pyslet.odata2.core import EntityCollection, NavigationCollection
+from pyslet.odata2.core import EntityCollection, NavigationCollection, Entity
 from influxdb import InfluxDBClient
 
 from config import INFLUXDB_DSN
@@ -69,6 +69,7 @@ class DatabaseMeasurements(NavigationCollection):
         for m in result['measurements']:
             e = self.new_entity()
             e['Name'].set_from_value(m['name'])
+            e['DatabaseName'].set_from_value(self.from_entity['Name'])
             e.exists = True
             yield e
 
@@ -84,6 +85,23 @@ class DatabaseMeasurements(NavigationCollection):
             return e
         else:
             raise KeyError('database %s does not contain measurement: %s' % (db_name, item))
+
+
+class MeasurementDatabase(NavigationCollection):
+    def itervalues(self):
+        return self.order_entities(
+            self.expand_entities(self.filter_entities(
+                self.generate_entities()
+            ))
+        )
+
+    def generate_entities(self):
+        db_name = self.from_entity['DatabaseName'].value
+        e = self.new_entity()
+        e['Name'].set_from_value(db_name)
+        e.exists = True
+        yield e
+
 
 
 class MeasurementPoints(NavigationCollection):

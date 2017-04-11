@@ -60,6 +60,11 @@ class TestInfluxOData(unittest.TestCase):
                 with db['Measurements'].open() as measurements:
                     for m in measurements:
                         self.assertIsInstance(m, unicode)
+                    for m in measurements.itervalues():
+                        self.assertRaises(TypeError, lambda: m['Database']['Name'].value)
+                        m_db = m['Database'].get_entity()
+                        self.assertIsNotNone(m_db)
+                        self.assertEqual(m_db['Name'].value, db['Name'].value)
 
 
 class TestClient(unittest.TestCase):

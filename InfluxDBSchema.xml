@@ -31,6 +31,8 @@
                             </Key>
                             <Property Name="Name" Type="Edm.String" Nullable="false" MaxLength="256"
                                       Unicode="true" FixedLength="false" />
+                            <Property Name="DatabaseName" Type="Edm.String" Nullable="false" MaxLength="256"
+                                      Unicode="true" FixedLength="false" />
                             <NavigationProperty Name="Database" Relationship="InfluxDBSchema.DatabaseMeasurement"
                                                 FromRole="Measurement" ToRole="Database" />
                             <NavigationProperty Name="Points" Relationship="InfluxDBSchema.MeasurementPoint"
