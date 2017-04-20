@@ -8,7 +8,7 @@ from wsgiref.simple_server import make_server
 import pyslet.odata2.metadata as edmx
 from pyslet.odata2.server import ReadOnlyServer
 
-from generate_metadata import generate_metadata
+from influxdbmeta import generate_metadata
 from influxdbds import InfluxDBEntityContainer
 
 cache_app = None  #: our Server instance
@@ -30,13 +30,8 @@ def run_cache_server(port):
     server.serve_forever()
 
 
-def write_metadata(metadata_filename, dsn):
-    with open(metadata_filename, 'wb') as f:
-        f.write(generate_metadata(dsn))
-
-
 def load_metadata(metadata_filename, dsn):
-    """Loads the metadata file from the current directory."""
+    """Loads the metadata file and connects the InfluxDBEntityContainer."""
     doc = edmx.Document()
     with open(metadata_filename, 'rb') as f:
         doc.ReadFromStream(f)
@@ -61,7 +56,7 @@ def start_server(service_root, doc):
     run_cache_server(port)
 
 
-def makeSampleConfig():
+def make_sample_config():
     config = ConfigParser(allow_no_value=True)
     config.add_section('server')
     config.set('server', 'server_root', 'http://localhost:8080')
@@ -82,23 +77,29 @@ def makeSampleConfig():
 
 def main():
     """read config and start odata api server"""
+    # parse arguments
     p = argparse.ArgumentParser()
-    p.add_argument('-c', '--config', help='specify a conf file', default='production.conf')
+    p.add_argument('-c', '--config', help='specify a conf file (default=production.conf)', default='production.conf')
     p.add_argument('-m', '--makeSampleConfig', help='generates sample.conf in your current directory (does not start server)',
                    action="store_true")
     args = p.parse_args()
 
     if args.makeSampleConfig:
-        makeSampleConfig()
+        make_sample_config()
         sys.exit()
 
-    c = ConfigParser()
-    c.read([args.config])
-    metadata_filename = c.get('metadata', 'metadata_file')
-    dsn = c.get('influxdb', 'dsn')
-    if c.getboolean('metadata', 'autogenerate'):
-        write_metadata(metadata_filename, dsn)
+    # parse config file
+    with open(args.config, 'r') as fp:
+        c = ConfigParser()
+        c.readfp(fp)
+        metadata_filename = c.get('metadata', 'metadata_file')
+        dsn = c.get('influxdb', 'dsn')
 
+    # generate and load metadata
+    if c.getboolean('metadata', 'autogenerate'):
+        metadata = generate_metadata(dsn)
+        with open(metadata_filename, 'wb') as f:
+            f.write(metadata)
     doc = load_metadata(metadata_filename, dsn)
     start_server(c.get('server', 'server_root'), doc)
 

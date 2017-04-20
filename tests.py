@@ -7,8 +7,7 @@ from pyslet.odata2 import core
 import threading
 
 
-SERVICE_PORT = 8080
-SERVICE_ROOT = "http://localhost:%i/" % SERVICE_PORT
+from mock import Mock, MagicMock
 
 
 class TestInfluxOData(unittest.TestCase):
