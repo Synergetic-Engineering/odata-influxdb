@@ -49,11 +49,13 @@ class InfluxDBMeasurement(EntityCollection):
         super(InfluxDBMeasurement, self).__init__(**kwargs)
         self.container = container
         self.db_name, self.measurement_name = self.entity_set.name.split('__')
+        if self.db_name == u'internal':
+            self.db_name = u'_internal'
         self.topmax = 100
 
     def __len__(self):
         """influxdb only counts non-null values, so we return the count of the field with maximum non-null values"""
-        q = 'SELECT COUNT(*) FROM %s' % self.measurement_name
+        q = u'SELECT COUNT(*) FROM "{}"'.format(self.measurement_name)
         self.container.client.switch_database(self.db_name)
         rs = self.container.client.query(q)
         max_count = max(val for val in rs.get_points().next().values() if isinstance(val, numbers.Number))
@@ -66,7 +68,7 @@ class InfluxDBMeasurement(EntityCollection):
                 self.generate_entities())))
 
     def generate_entities(self):
-        q = "SELECT * FROM %s" % self.measurement_name
+        q = u'SELECT * FROM "{}"'.format(self.measurement_name)
         result = self.container.client.query(q, database=self.db_name)
         fields = get_tags_and_field_keys(self.container.client, self.measurement_name, self.db_name)
         for m in result[self.measurement_name]:
@@ -82,7 +84,7 @@ class InfluxDBMeasurement(EntityCollection):
         raise NotImplementedError
 
     def set_page(self, top, skip=0, skiptoken=None):
-        self.top = top or self.topmax or 10 # a None value for top causes the default iterpage method to set a skiptoken
+        self.top = 10 or top or self.topmax or 10 # a None value for top causes the default iterpage method to set a skiptoken
         self.skip = skip
         self.skiptoken = skiptoken
         self.nextSkiptoken = None
