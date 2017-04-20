@@ -11,21 +11,27 @@ python: Currently requires Python 2.
 
 ## Usage:
 
-Create a config file at `influxdb_dal/config.py`. Minimal example shown below:
+Run the following command to generate a sample config file:
 
-```python
-#config.py
-INFLUXDB_DSN = 'influxdb://<user>:<pass>@fqdn'
-```
+`python server.py --makeSampleConfig`
+
+Update the `dsn` in the conf file to reflect your InfluxDB server location.
+
+You can change the hostname/port for the API server by updating `server_root` in the conf file.
 
 Start your odata endpoint server with `python server.py`.
 
-Point an OData browser to `http://hostname:8080/DatabaseSet('kck_thermo')/Measurements('thermo')/Points`
+Point an OData browser to `http://hostname:8080/`
 
 ## Tests:
 
 Run unit tests with `python tests.py`
 
-## Notes:
+## OData layout:
 
-Currently the unit tests and working code are dependant on a specific server and metadata structure setup (kck_thermo).
+Upon startup, the server pulls the metadata from your InfluxDB server
+(database names, measurement names, field keys, and tag keys).
+
+Each measurement is set up as an OData table. All field keys and tag keys
+from the InfluxDB database are including in the table, but can be null
+depending on your InfluxDB setup.
