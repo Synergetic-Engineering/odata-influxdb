@@ -1,14 +1,15 @@
+import argparse
+import logging
 import os
+import sys
+from ConfigParser import ConfigParser
+from wsgiref.simple_server import make_server
 
 import pyslet.odata2.metadata as edmx
 from pyslet.odata2.server import ReadOnlyServer
-from influxdb_dal.influxdbds import InfluxDBEntityContainer
-from generate_metadata import generate_metadata
-from ConfigParser import ConfigParser, RawConfigParser
-import argparse, sys
 
-import logging
-from wsgiref.simple_server import make_server
+from generate_metadata import generate_metadata
+from influxdbds import InfluxDBEntityContainer
 
 cache_app = None  #: our Server instance
 
