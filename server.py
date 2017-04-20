@@ -66,6 +66,7 @@ def make_sample_config():
     config.set('metadata', '; metadata_file specifies the location of the metadata file to generate')
     config.set('metadata', 'metadata_file', 'generated.xml')
     config.add_section('influxdb')
+    config.set('influxdb', '; supported schemes include https+influxdb:// and udp+influxdb://')
     config.set('influxdb', 'dsn', 'influxdb://user:pass@localhost:8086')
     sample_name = 'sample.conf'
     if os.path.exists(sample_name):
@@ -79,8 +80,11 @@ def main():
     """read config and start odata api server"""
     # parse arguments
     p = argparse.ArgumentParser()
-    p.add_argument('-c', '--config', help='specify a conf file (default=production.conf)', default='production.conf')
-    p.add_argument('-m', '--makeSampleConfig', help='generates sample.conf in your current directory (does not start server)',
+    p.add_argument('-c', '--config',
+                   help='specify a conf file (default=production.conf)',
+                   default='production.conf')
+    p.add_argument('-m', '--makeSampleConfig',
+                   help='generates sample.conf in your current directory (does not start server)',
                    action="store_true")
     args = p.parse_args()
 

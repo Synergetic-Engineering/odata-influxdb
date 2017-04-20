@@ -22,8 +22,9 @@ class InfluxDBEntityContainer(object):
     container
         pyslet.odata2.csdl.EntityContainer
 
-    client
-        influxdb.InfluxDBClient
+    dsn
+        data source name in the format: influxdb://user:pass@host:port/
+        supported schemes include https+influxdb:// and udp+influxdb://
     """
     def __init__(self, container, dsn, **kwargs):
         self.container = container
