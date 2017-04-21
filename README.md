@@ -35,3 +35,14 @@ Upon startup, the server pulls the metadata from your InfluxDB server
 Each measurement is set up as an OData table. All field keys and tag keys
 from the InfluxDB database are including in the table, but can be null
 depending on your InfluxDB setup.
+
+## Filters
+
+OData filter spec is supported, but has some limitations.
+
+Supported operators are:
+
+* gt (greater than, >)
+* lt (less than, <)
+* eq (equals, =)
+* ne (not equal to, !=)

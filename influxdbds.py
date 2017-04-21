@@ -3,8 +3,15 @@ import numbers
 
 import influxdb
 from functools32 import lru_cache
-from pyslet.odata2.core import EntityCollection, NavigationCollection, Entity
+from pyslet.odata2.core import EntityCollection, CommonExpression, PropertyExpression, BinaryExpression, \
+    LiteralExpression, Operator
 
+operator_symbols = {
+    Operator.lt: ' < ',
+    Operator.gt: ' > ',
+    Operator.eq: ' = ',
+    Operator.ne: ' != '
+}
 
 @lru_cache()
 def get_tags_and_field_keys(client, measurement_name, db_name):
@@ -40,6 +47,7 @@ class InfluxDBEntityContainer(object):
         return InfluxDBMeasurement
 
 
+# noinspection SqlDialectInspection
 class InfluxDBMeasurement(EntityCollection):
     """represents a measurement query, containing points
 
@@ -64,11 +72,10 @@ class InfluxDBMeasurement(EntityCollection):
 
     def itervalues(self):
         return self.order_entities(
-            self.expand_entities(self.filter_entities(
-                self.generate_entities())))
+            self.expand_entities(self._generate_entities()))
 
-    def generate_entities(self):
-        q = u'SELECT * FROM "{}"'.format(self.measurement_name)
+    def _generate_entities(self):
+        q = u'SELECT * FROM "{}" {}'.format(self.measurement_name, self._where_expression())
         result = self.container.client.query(q, database=self.db_name)
         fields = get_tags_and_field_keys(self.container.client, self.measurement_name, self.db_name)
         for m in result[self.measurement_name]:
@@ -80,11 +87,35 @@ class InfluxDBMeasurement(EntityCollection):
             e.exists = True
             yield e
 
+    def _where_expression(self):
+        """generates a valid InfluxDB "WHERE" query from the parsed filter (set with self.set_filter)"""
+        if self.filter is None:
+            return ''
+        elif isinstance(self.filter, BinaryExpression):
+            expressions = (self.filter.operands[0],
+                           self.filter.operands[1])
+            symbol = operator_symbols[self.filter.operator]
+            return 'WHERE {}'.format(symbol.join(self._sql_expression(o) for o in expressions))
+        else:
+            raise NotImplementedError
+
+    def _sql_expression(self, expression):
+        if isinstance(expression, PropertyExpression):
+            return expression.name
+        elif isinstance(expression, LiteralExpression):
+            return self._format_literal(expression.value.value)
+
+    def _format_literal(self, val):
+        if isinstance(val, unicode):
+            return "'{}'".format(val)
+        else:
+            return str(val)
+
     def __getitem__(self, key):
         raise NotImplementedError
 
     def set_page(self, top, skip=0, skiptoken=None):
-        self.top = 10 or top or self.topmax or 10 # a None value for top causes the default iterpage method to set a skiptoken
+        self.top = top or self.topmax or 10 # a None value for top causes the default iterpage method to set a skiptoken
         self.skip = skip
         self.skiptoken = skiptoken
         self.nextSkiptoken = None
