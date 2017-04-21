@@ -1,5 +1,5 @@
 import unittest
-from server import load_metadata, make_server
+from server import load_metadata, make_server, get_config, configure_app, configure_server
 from pyslet.odata2.client import Client, ClientCollection, ClientException
 from pyslet.odata2.server import ReadOnlyServer
 from pyslet.odata2 import csdl as edm
@@ -12,94 +12,48 @@ from mock import Mock, MagicMock
 
 class TestInfluxOData(unittest.TestCase):
     def setUp(self):
-        self._doc = load_metadata()
+        self._config = get_config('testing.conf')
+        self._doc = load_metadata(self._config)
         self._container = self._doc.root.DataServices['InfluxDBSchema.InfluxDB']
 
-    def testDatabases(self):
-        container = self._container
-        collection = container['DatabaseSet'].OpenCollection()
-        self.assertGreater(len(collection), 0)
-        for db in collection:
-            self.assertIsInstance(db, unicode)
-        self.assertIn(u'_internal', list(collection))
-        internal = collection['_internal']
-        self.assertEqual(internal['Name'], '_internal')
+    def test_where_clause(self):
+        first_feed = self._container.itervalues().next()
+        collection = first_feed.OpenCollection()
 
-    def testKckThermoDatabase(self):
-        container = self._container
-        collection = container['DatabaseSet'].OpenCollection()
-        self.assertGreater(len(collection), 0)
-        for db in collection:
-            self.assertIsInstance(db, unicode)
-        self.assertIn(u'kck_thermo', list(collection))
-        thermo = collection['kck_thermo']
-        self.assertEqual(thermo['Name'], 'kck_thermo')
-        with thermo['Measurements'].OpenCollection() as measurements:
-            t = measurements['kck_thermo.thermo']
-            self.assertIsNotNone(t)
-            with t['Points'].OpenCollection() as points:
-                p_list = list(points.itervalues())
-                self.assertIsInstance(p_list[0]['heatTransfer_use'].value, float)
-                print list(p_list[0].iteritems())
-
-    def testMeasurements(self):
-        container = self._container
-        collection = container['MeasurementSet'].OpenCollection()
-        self.assertGreaterEqual(len(collection), 0)
-        for measurement in collection:
-            print measurement
-
-    def testDatabaseMeasurement(self):
-        container = self._container
-        with container['DatabaseSet'].OpenCollection() as dbs:
-            for db in dbs.itervalues():
-                self.assertIsInstance(db, edm.Entity)
-                m = db['Measurements']
-                self.assertTrue(db['Measurements'].isCollection)
-                with db['Measurements'].OpenCollection() as measurements:
-                    for m in measurements:
-                        self.assertIsInstance(m, unicode)
-                    for m in measurements.itervalues():
-                        self.assertRaises(TypeError, lambda: m['Database']['Name'].value)
-                        m_db = m['Database'].GetEntity()
-                        self.assertIsNotNone(m_db)
-                        self.assertEqual(m_db['Name'].value, db['Name'].value)
+        def where_clause_from_string(filter_str):
+            e = core.CommonExpression.from_str(filter_str)
+            collection.set_filter(e)
+            where = collection._where_expression()
+            return where
+        where = where_clause_from_string(u"prop eq 'test'")
+        self.assertEqual(where, u"WHERE prop = 'test'", msg="Correct where clause for eq operator")
+        where = where_clause_from_string(u"prop gt 0")
+        self.assertEqual(where, u"WHERE prop > 0", msg="Correct where clause for gt operator (Int)")
+        where = where_clause_from_string(u"prop gt -32.53425D")
+        self.assertEqual(where, u"WHERE prop > -32.53425", msg="Correct where clause for eq operator (Float)")
+        collection.close()
 
 
 class TestClient(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        doc = load_metadata()
-        server = ReadOnlyServer(serviceRoot=SERVICE_ROOT)
-        server.SetModel(doc)
-        # The server is now ready to serve forever
-        global cache_app
-        cache_app = server
-        """Starts the web server running"""
-        cls._server = make_server('', SERVICE_PORT, cache_app)
+        cls._config = get_config('testing.conf')
+        doc = load_metadata(cls._config)
+        cls._app = configure_app(cls._config, doc)
+        cls._server = configure_server(cls._config, cls._app)
         t = threading.Thread(target=cls._server.serve_forever)
         t.start()
+        threading._sleep(5)
 
     @classmethod
     def tearDownClass(cls):
         cls._server.shutdown()
         cls._server.socket.close()
 
-    def testDatabaseEndpoint(self):
-        c = Client('http://localhost:8080')
-        f = c.feeds['DatabaseSet'].OpenCollection()
-        self.assertGreater(len(f), 0)
-        for db in f.itervalues():
-            self.assertIsInstance(db['Name'].value, unicode)
-        internal = f['_internal']
-        self.assertIsInstance(internal, core.Entity)
-        measurements = internal['Measurements']
-        self.assertTrue(measurements.isCollection)
-        with measurements.OpenCollection() as m:
-            cq = m['_internal.cq']
-        #self.assertGreater(len(f), 0)
-        #for m in measurements:
-        #    print m
+    def testClient(self):
+        c = Client(self._config.get('server', 'server_root'))
+        self.assertGreater(c.feeds, 0, msg="Found at least one odata feed")
+
 
 
 if __name__ == '__main__':

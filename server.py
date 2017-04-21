@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import sys
+from urlparse import urlparse
 from ConfigParser import ConfigParser
 from wsgiref.simple_server import make_server
 
@@ -22,16 +23,16 @@ class FileExistsError(IOError):
         return 'file already exists: {}'.format(self.__path)
 
 
-def run_cache_server(port):
-    """Starts the web server running"""
-    server = make_server('', port, cache_app)
-    logging.info("Starting HTTP server on port %i..." % port)
-    # Respond to requests until process is killed
-    server.serve_forever()
+def load_metadata(config):
+    """Regenerate and load the metadata file and connects the InfluxDBEntityContainer."""
+    metadata_filename = config.get('metadata', 'metadata_file')
+    dsn = config.get('influxdb', 'dsn')
 
+    if config.getboolean('metadata', 'autogenerate'):
+        metadata = generate_metadata(dsn)
+        with open(metadata_filename, 'wb') as f:
+            f.write(metadata)
 
-def load_metadata(metadata_filename, dsn):
-    """Loads the metadata file and connects the InfluxDBEntityContainer."""
     doc = edmx.Document()
     with open(metadata_filename, 'rb') as f:
         doc.ReadFromStream(f)
@@ -40,20 +41,25 @@ def load_metadata(metadata_filename, dsn):
     return doc
 
 
-def start_server(service_root, doc):
-    """starts the odata api server
-    :param doc: the odata object to serve
-    :type doc: edmx.Document
-    
-    :param service_root: example 'http://localhost:8080' 
-    :type service_root: str
-    """
-    port = int(service_root[service_root.rfind(':') + 1:])
-    server = ReadOnlyServer(serviceRoot=service_root)
-    server.SetModel(doc)
-    global cache_app
-    cache_app = server
-    run_cache_server(port)
+def configure_app(c, doc):
+    service_root = c.get('server', 'server_root')
+    app = ReadOnlyServer(serviceRoot=service_root)
+    app.SetModel(doc)
+    return app
+
+
+def configure_server(c, app):
+    url = urlparse(c.get('server', 'server_root'))
+    server = make_server(url.hostname, url.port, app)
+    return server
+
+
+def start_server(c, doc):
+    app = configure_app(c, doc)
+    server = configure_server(c, app)
+    logging.info("Starting HTTP server on port %i..." % server.server_port)
+    # Respond to requests until process is killed
+    server.serve_forever()
 
 
 def make_sample_config():
@@ -76,6 +82,13 @@ def make_sample_config():
     print('generated sample conf at: {}'.format(os.path.join(os.getcwd(), sample_name)))
 
 
+def get_config(config):
+    with open(config, 'r') as fp:
+        c = ConfigParser()
+        c.readfp(fp)
+    return c
+
+
 def main():
     """read config and start odata api server"""
     # parse arguments
@@ -93,20 +106,13 @@ def main():
         sys.exit()
 
     # parse config file
-    with open(args.config, 'r') as fp:
-        c = ConfigParser()
-        c.readfp(fp)
-        metadata_filename = c.get('metadata', 'metadata_file')
-        dsn = c.get('influxdb', 'dsn')
+    c = get_config(args.config)
 
     # generate and load metadata
-    if c.getboolean('metadata', 'autogenerate'):
-        metadata = generate_metadata(dsn)
-        with open(metadata_filename, 'wb') as f:
-            f.write(metadata)
-    doc = load_metadata(metadata_filename, dsn)
-    start_server(c.get('server', 'server_root'), doc)
+    doc = load_metadata(c)
 
+    # start server
+    start_server(c, doc)
 
 
 if __name__ == '__main__':
