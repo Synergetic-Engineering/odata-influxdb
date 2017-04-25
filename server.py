@@ -14,6 +14,10 @@ from influxdbds import InfluxDBEntityContainer
 
 cache_app = None  #: our Server instance
 
+logging.basicConfig()
+logger = logging.getLogger("odata-influxdb")
+logger.setLevel(logging.INFO)
+
 
 class FileExistsError(IOError):
     def __init__(self, path):
@@ -29,6 +33,7 @@ def load_metadata(config):
     dsn = config.get('influxdb', 'dsn')
 
     if config.getboolean('metadata', 'autogenerate'):
+        logger.info("Generating OData metadata xml file from InfluxDB metadata")
         metadata = generate_metadata(dsn)
         with open(metadata_filename, 'wb') as f:
             f.write(metadata)
@@ -57,7 +62,7 @@ def configure_server(c, app):
 def start_server(c, doc):
     app = configure_app(c, doc)
     server = configure_server(c, app)
-    logging.info("Starting HTTP server on port %i..." % server.server_port)
+    logger.info("Starting HTTP server on port %i..." % server.server_port)
     # Respond to requests until process is killed
     server.serve_forever()
 
