@@ -1,13 +1,8 @@
 import unittest
 from server import load_metadata, make_server, get_config, configure_app, configure_server
-from pyslet.odata2.client import Client, ClientCollection, ClientException
-from pyslet.odata2.server import ReadOnlyServer
-from pyslet.odata2 import csdl as edm
+from pyslet.odata2.client import Client
 from pyslet.odata2 import core
 import threading
-
-
-from mock import Mock, MagicMock
 
 
 class TestInfluxOData(unittest.TestCase):
@@ -17,7 +12,7 @@ class TestInfluxOData(unittest.TestCase):
         self._container = self._doc.root.DataServices['InfluxDBSchema.InfluxDB']
 
     def test_where_clause(self):
-        first_feed = self._container.itervalues().next()
+        first_feed = next(self._container.itervalues())
         collection = first_feed.OpenCollection()
 
         def where_clause_from_string(filter_str):
@@ -32,6 +27,51 @@ class TestInfluxOData(unittest.TestCase):
         where = where_clause_from_string(u"prop gt -32.53425D")
         self.assertEqual(where, u"WHERE prop > -32.53425", msg="Correct where clause for eq operator (Float)")
         collection.close()
+
+    def test_limit_expression(self):
+        first_feed = next(self._container.itervalues())
+        collection = first_feed.OpenCollection()
+        expr = collection._limit_expression()
+        self.assertEqual(expr, '')
+        collection.set_page(top=100)
+        collection.paging = True
+        expr = collection._limit_expression()
+        self.assertEqual(expr, 'LIMIT 100')
+        collection.set_page(top=10, skip=10)
+        collection.paging = True
+        expr = collection._limit_expression()
+        self.assertEqual(expr, 'LIMIT 10 OFFSET 10')
+
+    def test_iterpage(self):
+        first_feed = next(self._container.itervalues())
+        collection = first_feed.OpenCollection()
+        if len(collection) < 20:
+            collection.close()
+            self.skipTest(reason="DB does not have enough entries to test pagination.")
+        collection.set_page(top=10, skip=0)
+        first_page = list(collection.iterpage())
+        self.assertGreater(len(first_page), 0)
+        self.assertLessEqual(len(first_page), 10)
+        second_page = list(collection.iterpage())
+        self.assertGreater(len(second_page), 0)
+        self.assertLessEqual(len(second_page), 10)
+        collection.set_page(top=10, skip=len(collection)-5)
+        last_page = list(collection.iterpage())
+        print (last_page)
+        self.assertEqual(len(last_page), 5)  # note: may fail if data is added during testing
+        collection.close()
+
+    def test_itervalues(self):
+        first_feed = next(self._container.itervalues())
+        with first_feed.OpenCollection() as collection:
+            for e in collection.itervalues():
+                self.assertIsInstance(e, core.Entity)
+
+    def test_generate_entities(self):
+        first_feed = next(self._container.itervalues())
+        with first_feed.OpenCollection() as collection:
+            for e in collection._generate_entities():
+                self.assertIsInstance(e, core.Entity)
 
 
 class TestClient(unittest.TestCase):
@@ -54,6 +94,15 @@ class TestClient(unittest.TestCase):
         c = Client(self._config.get('server', 'server_root'))
         self.assertGreater(c.feeds, 0, msg="Found at least one odata feed")
 
+    def testNextLink(self):
+        c = Client(self._config.get('server', 'server_root'))
+        test_feed = c.feeds['internal__write']
+        coll = test_feed.OpenCollection()
+        l = len(coll)
+        coll.set_page(top=10, skiptoken=l-5)
+        last_page = list(coll.iterpage())
+        self.assertEqual(len(last_page), 5)
+        coll.close()
 
 
 if __name__ == '__main__':
