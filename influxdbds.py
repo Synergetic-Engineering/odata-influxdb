@@ -33,10 +33,11 @@ class InfluxDBEntityContainer(object):
         data source name in the format: influxdb://user:pass@host:port/
         supported schemes include https+influxdb:// and udp+influxdb://
     """
-    def __init__(self, container, dsn, **kwargs):
+    def __init__(self, container, dsn, topmax, **kwargs):
         self.container = container
         self.dsn = dsn
         self.client = influxdb.InfluxDBClient.from_DSN(self.dsn)
+        self._topmax = topmax
         for es in self.container.EntitySet:
             self.bind_entity_set(es)
 
@@ -59,7 +60,7 @@ class InfluxDBMeasurement(EntityCollection):
         self.db_name, self.measurement_name = self.entity_set.name.split('__')
         if self.db_name == u'internal':
             self.db_name = u'_internal'
-        self.topmax = 50
+        self.topmax = getattr(self.container, '_topmax', 50)
 
     @lru_cache()
     def _query_len(self):

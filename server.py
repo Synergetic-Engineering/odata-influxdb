@@ -42,7 +42,11 @@ def load_metadata(config):
     with open(metadata_filename, 'rb') as f:
         doc.ReadFromStream(f)
     container = doc.root.DataServices['InfluxDBSchema.InfluxDB']
-    InfluxDBEntityContainer(container=container, dsn=dsn)
+    try:
+        topmax = config.getint('influxdb', 'max_items_per_query')
+    except:
+        topmax = 50
+    InfluxDBEntityContainer(container=container, dsn=dsn, topmax=topmax)
     return doc
 
 
@@ -79,6 +83,7 @@ def make_sample_config():
     config.add_section('influxdb')
     config.set('influxdb', '; supported schemes include https+influxdb:// and udp+influxdb://')
     config.set('influxdb', 'dsn', 'influxdb://user:pass@localhost:8086')
+    config.set('influxdb', 'max_items_per_query', '50')
     sample_name = 'sample.conf'
     if os.path.exists(sample_name):
         raise FileExistsError(sample_name)
