@@ -1,47 +1,118 @@
+import argparse
+import logging
+import os
+import sys
+from urlparse import urlparse
+from ConfigParser import ConfigParser
+from wsgiref.simple_server import make_server
+
 import pyslet.odata2.metadata as edmx
 from pyslet.odata2.server import ReadOnlyServer
-from influxdb_dal.influxdbds import InfluxDBEntityContainer
-from generate_metadata import generate_metadata
-from config import INFLUXDB_DSN
 
-SERVICE_PORT = 8080
-SERVICE_ROOT = "http://localhost:%i/" % SERVICE_PORT
-
-import logging
-from wsgiref.simple_server import make_server
+from influxdbmeta import generate_metadata
+from influxdbds import InfluxDBEntityContainer
 
 cache_app = None  #: our Server instance
 
 
-def run_cache_server():
-    """Starts the web server running"""
-    server = make_server('', SERVICE_PORT, cache_app)
-    logging.info("Starting HTTP server on port %i..." % SERVICE_PORT)
+class FileExistsError(IOError):
+    def __init__(self, path):
+        self.__path = path
+
+    def __str__(self):
+        return 'file already exists: {}'.format(self.__path)
+
+
+def load_metadata(config):
+    """Regenerate and load the metadata file and connects the InfluxDBEntityContainer."""
+    metadata_filename = config.get('metadata', 'metadata_file')
+    dsn = config.get('influxdb', 'dsn')
+
+    if config.getboolean('metadata', 'autogenerate'):
+        metadata = generate_metadata(dsn)
+        with open(metadata_filename, 'wb') as f:
+            f.write(metadata)
+
+    doc = edmx.Document()
+    with open(metadata_filename, 'rb') as f:
+        doc.ReadFromStream(f)
+    container = doc.root.DataServices['InfluxDBSchema.InfluxDB']
+    InfluxDBEntityContainer(container=container, dsn=dsn)
+    return doc
+
+
+def configure_app(c, doc):
+    service_root = c.get('server', 'server_root')
+    app = ReadOnlyServer(serviceRoot=service_root)
+    app.SetModel(doc)
+    return app
+
+
+def configure_server(c, app):
+    url = urlparse(c.get('server', 'server_root'))
+    server = make_server(url.hostname, url.port, app)
+    return server
+
+
+def start_server(c, doc):
+    app = configure_app(c, doc)
+    server = configure_server(c, app)
+    logging.info("Starting HTTP server on port %i..." % server.server_port)
     # Respond to requests until process is killed
     server.serve_forever()
 
 
-def load_metadata():
-    """Loads the metadata file from the current directory."""
-    doc = edmx.Document()
-    with open('generated.xml', 'rb') as f:
-        doc.ReadFromStream(f)
-    container = doc.root.DataServices['InfluxDBSchema.InfluxDB']
-    InfluxDBEntityContainer(container=container, dsn=INFLUXDB_DSN)
-    return doc
+def make_sample_config():
+    config = ConfigParser(allow_no_value=True)
+    config.add_section('server')
+    config.set('server', 'server_root', 'http://localhost:8080')
+    config.add_section('metadata')
+    config.set('metadata', '; set autogenerate to "no" for quicker startup of the server if you know your influxdb structure has not changed')
+    config.set('metadata', 'autogenerate', 'yes')
+    config.set('metadata', '; metadata_file specifies the location of the metadata file to generate')
+    config.set('metadata', 'metadata_file', 'generated.xml')
+    config.add_section('influxdb')
+    config.set('influxdb', '; supported schemes include https+influxdb:// and udp+influxdb://')
+    config.set('influxdb', 'dsn', 'influxdb://user:pass@localhost:8086')
+    sample_name = 'sample.conf'
+    if os.path.exists(sample_name):
+        raise FileExistsError(sample_name)
+    with open(sample_name, 'w') as cf:
+        config.write(cf)
+    print('generated sample conf at: {}'.format(os.path.join(os.getcwd(), sample_name)))
+
+
+def get_config(config):
+    with open(config, 'r') as fp:
+        c = ConfigParser()
+        c.readfp(fp)
+    return c
 
 
 def main():
-    """Executed when we are launched"""
-    with open('generated.xml', 'wb') as f:
-        f.write(generate_metadata(INFLUXDB_DSN))
-    doc = load_metadata()
-    server = ReadOnlyServer(serviceRoot=SERVICE_ROOT)
-    server.SetModel(doc)
-    # The server is now ready to serve forever
-    global cache_app
-    cache_app = server
-    run_cache_server()
+    """read config and start odata api server"""
+    # parse arguments
+    p = argparse.ArgumentParser()
+    p.add_argument('-c', '--config',
+                   help='specify a conf file (default=production.conf)',
+                   default='production.conf')
+    p.add_argument('-m', '--makeSampleConfig',
+                   help='generates sample.conf in your current directory (does not start server)',
+                   action="store_true")
+    args = p.parse_args()
+
+    if args.makeSampleConfig:
+        make_sample_config()
+        sys.exit()
+
+    # parse config file
+    c = get_config(args.config)
+
+    # generate and load metadata
+    doc = load_metadata(c)
+
+    # start server
+    start_server(c, doc)
 
 
 if __name__ == '__main__':

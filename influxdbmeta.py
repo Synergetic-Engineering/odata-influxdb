@@ -18,8 +18,8 @@ xml_foot = """
 </edmx:Edmx>"""
 
 influx_type_to_edm_type = {
-    'float': 'Edm.Double',
-    'integer': 'Edm.Int32',
+    'float': 'Edm.Double',  # influxdb stores floats in a float64 format
+    'integer': 'Edm.Int64',  # influxdb stores integers as 64-bit signed
     'string': 'Edm.String'
 }
 
@@ -32,11 +32,11 @@ def get_edm_type(influx_type):
 
 
 def mangle_measurement_name(db_name, m_name):
-    return '{}__{}'.format(db_name, m_name).strip('_')
+    return '{}__{}'.format(db_name, m_name).strip('_')  # edmx names cannot begin with '_'
 
 
 def mangle_db_name(db_name):
-    return db_name.strip('_')
+    return db_name.strip('_')  # edmx names cannot begin with '_'
 
 
 class InfluxDB(object):
@@ -44,6 +44,7 @@ class InfluxDB(object):
         self.client = InfluxDBClient.from_DSN(dsn)
 
     def fields(self, db_name):
+        """returns a tuple of dicts where each dict has attributes (name, type, edm_type)"""
         fields_rs = self.client.query('show field keys', database=db_name)
         tags_rs = self.client.query('show tag keys', database=db_name)
         # expand and deduplicate
@@ -90,6 +91,7 @@ def generate_properties_xml(m):
 
 
 def generate_key_xml(m):
+    """influxdb has no concept of a key, so we use the time value (NOT gauranteed to be unique)"""
     return '<Key><PropertyRef Name="time" /></Key><Property Name="time" Type="Edm.DateTime" Nullable="false" />'
 
 
@@ -101,16 +103,18 @@ def gen_entity_type_xml(m):
         generate_properties_xml(m))
 
 
-def entity_sets_and_types(i):
+def entity_sets_and_types(db):
+    """generate xml entries for entity sets (containers) and entity types (with properties)"""
     entity_sets = []
     entity_types = []
-    for m in i.measurements:
+    for m in db.measurements:
         entity_sets.append(gen_entity_set_xml(m))
         entity_types.append(gen_entity_type_xml(m))
     return entity_sets, entity_types
 
 
 def generate_metadata(dsn):
+    """connect to influxdb, read the structure, and return an edmx xml file string"""
     i = InfluxDB(dsn)
     entity_sets, entity_types = entity_sets_and_types(i)
     output = """{}
