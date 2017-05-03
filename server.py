@@ -14,6 +14,10 @@ from influxdbds import InfluxDBEntityContainer
 
 cache_app = None  #: our Server instance
 
+logging.basicConfig()
+logger = logging.getLogger("odata-influxdb")
+logger.setLevel(logging.INFO)
+
 
 class FileExistsError(IOError):
     def __init__(self, path):
@@ -29,6 +33,7 @@ def load_metadata(config):
     dsn = config.get('influxdb', 'dsn')
 
     if config.getboolean('metadata', 'autogenerate'):
+        logger.info("Generating OData metadata xml file from InfluxDB metadata")
         metadata = generate_metadata(dsn)
         with open(metadata_filename, 'wb') as f:
             f.write(metadata)
@@ -37,7 +42,11 @@ def load_metadata(config):
     with open(metadata_filename, 'rb') as f:
         doc.ReadFromStream(f)
     container = doc.root.DataServices['InfluxDBSchema.InfluxDB']
-    InfluxDBEntityContainer(container=container, dsn=dsn)
+    try:
+        topmax = config.getint('influxdb', 'max_items_per_query')
+    except:
+        topmax = 50
+    InfluxDBEntityContainer(container=container, dsn=dsn, topmax=topmax)
     return doc
 
 
@@ -57,12 +66,12 @@ def configure_server(c, app):
 def start_server(c, doc):
     app = configure_app(c, doc)
     server = configure_server(c, app)
-    logging.info("Starting HTTP server on port %i..." % server.server_port)
+    logger.info("Starting HTTP server on port %i..." % server.server_port)
     # Respond to requests until process is killed
     server.serve_forever()
 
 
-def make_sample_config():
+def get_sample_config():
     config = ConfigParser(allow_no_value=True)
     config.add_section('server')
     config.set('server', 'server_root', 'http://localhost:8080')
@@ -70,10 +79,15 @@ def make_sample_config():
     config.set('metadata', '; set autogenerate to "no" for quicker startup of the server if you know your influxdb structure has not changed')
     config.set('metadata', 'autogenerate', 'yes')
     config.set('metadata', '; metadata_file specifies the location of the metadata file to generate')
-    config.set('metadata', 'metadata_file', 'generated.xml')
+    config.set('metadata', 'metadata_file', 'test_metadata.xml')
     config.add_section('influxdb')
     config.set('influxdb', '; supported schemes include https+influxdb:// and udp+influxdb://')
     config.set('influxdb', 'dsn', 'influxdb://user:pass@localhost:8086')
+    config.set('influxdb', 'max_items_per_query', '50')
+    return config
+
+def make_sample_config():
+    config = get_sample_config()
     sample_name = 'sample.conf'
     if os.path.exists(sample_name):
         raise FileExistsError(sample_name)

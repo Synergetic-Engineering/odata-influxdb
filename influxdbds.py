@@ -16,8 +16,8 @@ operator_symbols = {
 @lru_cache()
 def get_tags_and_field_keys(client, measurement_name, db_name):
     client.switch_database(db_name)
-    field_keys = tuple(f['fieldKey'] for f in client.query('show field keys')[measurement_name])
-    tag_keys = tuple(t['tagKey'] for t in client.query('show tag keys')[measurement_name])
+    field_keys = tuple(f['fieldKey'] for f in client.query('SHOW FIELD KEYS')[measurement_name])
+    tag_keys = tuple(t['tagKey'] for t in client.query('SHOW TAG KEYS')[measurement_name])
     return tuple(field_keys + tag_keys)
 
 
@@ -33,10 +33,11 @@ class InfluxDBEntityContainer(object):
         data source name in the format: influxdb://user:pass@host:port/
         supported schemes include https+influxdb:// and udp+influxdb://
     """
-    def __init__(self, container, dsn, **kwargs):
+    def __init__(self, container, dsn, topmax, **kwargs):
         self.container = container
         self.dsn = dsn
         self.client = influxdb.InfluxDBClient.from_DSN(self.dsn)
+        self._topmax = topmax
         for es in self.container.EntitySet:
             self.bind_entity_set(es)
 
@@ -59,7 +60,7 @@ class InfluxDBMeasurement(EntityCollection):
         self.db_name, self.measurement_name = self.entity_set.name.split('__')
         if self.db_name == u'internal':
             self.db_name = u'_internal'
-        self.topmax = 50
+        self.topmax = getattr(self.container, '_topmax', 50)
 
     @lru_cache()
     def _query_len(self):
@@ -102,7 +103,7 @@ class InfluxDBMeasurement(EntityCollection):
             self._where_expression(),
             self._orderby_expression(),
             self._limit_expression(),
-        )
+        ).strip()
         logging.debug('Querying InfluxDB: {}'.format(q))
         result = self.container.client.query(q, database=self.db_name)
         fields = get_tags_and_field_keys(self.container.client, self.measurement_name, self.db_name)

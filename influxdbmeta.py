@@ -45,8 +45,8 @@ class InfluxDB(object):
 
     def fields(self, db_name):
         """returns a tuple of dicts where each dict has attributes (name, type, edm_type)"""
-        fields_rs = self.client.query('show field keys', database=db_name)
-        tags_rs = self.client.query('show tag keys', database=db_name)
+        fields_rs = self.client.query('SHOW FIELD KEYS', database=db_name)
+        tags_rs = self.client.query('SHOW TAG KEYS', database=db_name)
         # expand and deduplicate
         fields = set(tuple(f.items()) for f in chain(*chain(fields_rs, tags_rs)))
         fields = (dict(
@@ -75,9 +75,8 @@ class InfluxDB(object):
 
     @property
     def databases(self):
-        q = 'SHOW DATABASES'
-        rs = self.client.query(q)
-        return iter(rs.get_points())
+        rs = self.client.get_list_database()
+        return iter(rs)
 
 
 def gen_entity_set_xml(m):
