@@ -1,15 +1,113 @@
+import random
+import re
 import unittest
-from server import load_metadata, make_server, get_config, configure_app, configure_server
-from pyslet.odata2.client import Client
+import os
+from responses import RequestsMock
+from server import generate_metadata, get_sample_config, load_metadata
 from pyslet.odata2 import core
-import threading
+
+NUM_TEST_POINTS = 100
+
+json_database_list = {
+    "results": [{
+        "statement_id": 0,
+        "series": [{
+            "name": "databases",
+            "columns": ["name"],
+            "values": [
+                ["_internal"],
+                ["database1"]]}]}]}
+
+json_measurement_list = {
+    "results": [{
+        "statement_id": 0,
+        "series": [{
+            "name": "measurements",
+            "columns": ["name"],
+            "values": [
+                ["measurement1"]]}]}]}
+
+json_tag_keys = {
+    "results": [{
+        "statement_id": 0,
+        "series": [{
+            "name": "measurement1",
+            "columns": ["tagKey"],
+            "values": [["tag1"],
+                       ["tag2"]]}]}]}
+
+json_field_keys = {
+    "results": [{
+        "statement_id": 0,
+        "series": [{
+            "name": "measurement1",
+            "columns": ["fieldKey", "fieldType"],
+            "values": [["float_field", "float"],
+                       ["int_field", "integer"]]}]}]}
+
+
+def json_points_list(measurement_name, page_size=None):
+    num_values = page_size or NUM_TEST_POINTS
+    tag1_values = ["foo", "bar"]
+    tag2_values = ["one", "zero"]
+    value_list = [
+        ["2017-01-01T00:00:00Z",
+         random.choice(tag1_values), random.choice(tag2_values),
+         random.random(), random.randint(-40,40)]
+        for i in range(num_values)
+    ]
+    return {
+        "results": [{
+            "statement_id": 0,
+            "series": [{
+                "name": measurement_name,
+                "columns": ["time", 'tag1', 'tag2', 'float_field', 'int_field'],
+                "values": value_list}]}]}
+
+
+def json_count(measurement_name):
+    return {
+        "results": [{
+            "statement_id": 0,
+            "series": [{
+                "name": measurement_name,
+                "columns": [
+                    "time",
+                    "float_field",
+                    "int_field"],
+                "values": [[
+                    "1970-01-01T00:00:00Z", NUM_TEST_POINTS, NUM_TEST_POINTS]]}]}]}
 
 
 class TestInfluxOData(unittest.TestCase):
     def setUp(self):
-        self._config = get_config('testing.conf')
+        self._config = get_sample_config()
+        self._config.set('influxdb', 'dsn', 'influxdb://localhost:8086')
+        self._config.set('metadata', 'autogenerate', 'no')
+        self._config.set('metadata', 'metadata_file', os.path.join('test_data', 'test_metadata.xml'))
         self._doc = load_metadata(self._config)
         self._container = self._doc.root.DataServices['InfluxDBSchema.InfluxDB']
+
+    def test_generate_metadata(self):
+        with RequestsMock() as rsp:
+            rsp.add(rsp.GET, re.compile('.*SHOW\+DATABASES.*'),
+                    json=json_database_list, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+MEASUREMENTS.*'),
+                    json=json_measurement_list, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+MEASUREMENTS.*'),
+                    json=json_measurement_list, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+FIELD\+KEYS.*'),
+                    json=json_field_keys, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+TAG\+KEYS.*'),
+                    json=json_tag_keys, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+FIELD\+KEYS.*'),
+                    json=json_field_keys, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+TAG\+KEYS.*'),
+                    json=json_tag_keys, match_querystring=True)
+
+            metadata = generate_metadata('influxdb://localhost:8086')
+        file1 = open(os.path.join('test_data', 'test_metadata.xml'), 'rb').read()
+        self.assertEqual(metadata, file1)
 
     def test_where_clause(self):
         first_feed = next(self._container.itervalues())
@@ -20,6 +118,7 @@ class TestInfluxOData(unittest.TestCase):
             collection.set_filter(e)
             where = collection._where_expression()
             return where
+
         where = where_clause_from_string(u"prop eq 'test'")
         self.assertEqual(where, u"WHERE prop = 'test'", msg="Correct where clause for eq operator")
         where = where_clause_from_string(u"prop gt 0")
@@ -42,67 +141,56 @@ class TestInfluxOData(unittest.TestCase):
         expr = collection._limit_expression()
         self.assertEqual(expr, 'LIMIT 10 OFFSET 10')
 
+    def test_len_collection(self):
+        first_feed = next(self._container.itervalues())
+        collection = first_feed.OpenCollection()
+
+        with RequestsMock() as rsp:
+            rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
+                    json=json_count(collection.name), match_querystring=True)
+
+            len_collection = len(collection)
+        self.assertEqual(len_collection, NUM_TEST_POINTS)
+
     def test_iterpage(self):
         first_feed = next(self._container.itervalues())
         collection = first_feed.OpenCollection()
-        if len(collection) < 20:
-            collection.close()
-            self.skipTest(reason="DB does not have enough entries to test pagination.")
-        collection.set_page(top=10, skip=0)
-        first_page = list(collection.iterpage())
-        self.assertGreater(len(first_page), 0)
-        self.assertLessEqual(len(first_page), 10)
-        second_page = list(collection.iterpage())
-        self.assertGreater(len(second_page), 0)
-        self.assertLessEqual(len(second_page), 10)
-        collection.set_page(top=10, skip=len(collection)-5)
-        last_page = list(collection.iterpage())
-        print (last_page)
-        self.assertEqual(len(last_page), 5)  # note: may fail if data is added during testing
-        collection.close()
 
-    def test_itervalues(self):
-        first_feed = next(self._container.itervalues())
-        with first_feed.OpenCollection() as collection:
-            for e in collection.itervalues():
-                self.assertIsInstance(e, core.Entity)
+        page_size = 200
+        collection.set_page(top=page_size, skip=0)
+
+        with RequestsMock() as rsp:
+            re_limit = re.compile('.*q=SELECT\+%2A\+FROM\+%22measurement1.*LIMIT\+200&')
+            re_limit_offset = re.compile('.*q=SELECT\+%2A\+FROM\+%22measurement1.*LIMIT\+200\+OFFSET\+200&')
+            rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
+                    json=json_count(collection.name), match_querystring=True)
+            rsp.add(rsp.GET, re_limit,
+                    json=json_points_list('measurement1', page_size=page_size), match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*q=SHOW\+FIELD\+KEYS.*'),
+                    json=json_field_keys, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*q=SHOW\+TAG\+KEYS.*'),
+                    json=json_tag_keys, match_querystring=True)
+            rsp.add(rsp.GET, re_limit_offset,
+                    json=json_points_list('measurement1', page_size=page_size), match_querystring=True)
+
+            first_page = list(collection.iterpage())
+            collection.set_page(top=page_size, skip=page_size)
+            second_page = list(collection.iterpage())
+            collection.close()
 
     def test_generate_entities(self):
         first_feed = next(self._container.itervalues())
         with first_feed.OpenCollection() as collection:
-            for e in collection._generate_entities():
-                self.assertIsInstance(e, core.Entity)
+            with RequestsMock() as rsp:
+                rsp.add(rsp.GET, re.compile('.*q=SELECT\+%2A\+FROM\+%22measurement1%22&'),
+                        json=json_points_list(collection.name), match_querystring=True)
+                rsp.add(rsp.GET, re.compile('.*q=SHOW\+FIELD\+KEYS.*'),
+                        json=json_field_keys, match_querystring=True)
+                rsp.add(rsp.GET, re.compile('.*q=SHOW\+TAG\+KEYS.*'),
+                        json=json_tag_keys, match_querystring=True)
 
-
-class TestClient(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls._config = get_config('testing.conf')
-        doc = load_metadata(cls._config)
-        cls._app = configure_app(cls._config, doc)
-        cls._server = configure_server(cls._config, cls._app)
-        t = threading.Thread(target=cls._server.serve_forever)
-        t.start()
-        threading._sleep(5)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls._server.shutdown()
-        cls._server.socket.close()
-
-    def testClient(self):
-        c = Client(self._config.get('server', 'server_root'))
-        self.assertGreater(c.feeds, 0, msg="Found at least one odata feed")
-
-    def testNextLink(self):
-        c = Client(self._config.get('server', 'server_root'))
-        test_feed = c.feeds['internal__write']
-        coll = test_feed.OpenCollection()
-        l = len(coll)
-        coll.set_page(top=10, skiptoken=l-5)
-        last_page = list(coll.iterpage())
-        self.assertEqual(len(last_page), 5)
-        coll.close()
+                for e in collection._generate_entities():
+                    self.assertIsInstance(e, core.Entity)
 
 
 if __name__ == '__main__':

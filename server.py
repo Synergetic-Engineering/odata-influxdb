@@ -71,7 +71,7 @@ def start_server(c, doc):
     server.serve_forever()
 
 
-def make_sample_config():
+def get_sample_config():
     config = ConfigParser(allow_no_value=True)
     config.add_section('server')
     config.set('server', 'server_root', 'http://localhost:8080')
@@ -79,11 +79,15 @@ def make_sample_config():
     config.set('metadata', '; set autogenerate to "no" for quicker startup of the server if you know your influxdb structure has not changed')
     config.set('metadata', 'autogenerate', 'yes')
     config.set('metadata', '; metadata_file specifies the location of the metadata file to generate')
-    config.set('metadata', 'metadata_file', 'generated.xml')
+    config.set('metadata', 'metadata_file', 'test_metadata.xml')
     config.add_section('influxdb')
     config.set('influxdb', '; supported schemes include https+influxdb:// and udp+influxdb://')
     config.set('influxdb', 'dsn', 'influxdb://user:pass@localhost:8086')
     config.set('influxdb', 'max_items_per_query', '50')
+    return config
+
+def make_sample_config():
+    config = get_sample_config()
     sample_name = 'sample.conf'
     if os.path.exists(sample_name):
         raise FileExistsError(sample_name)

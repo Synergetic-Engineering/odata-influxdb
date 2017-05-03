@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx"
+           xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://schemas.microsoft.com/ado/2007/06/edmx ">
+    <edmx:DataServices m:DataServiceVersion="2.0">
+        <Schema Namespace="InfluxDBSchema" xmlns="http://schemas.microsoft.com/ado/2006/04/edm"
+                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                xsi:schemaLocation="http://schemas.microsoft.com/ado/2006/04/edm ">
+    <EntityContainer Name="InfluxDB" m:IsDefaultEntityContainer="true">
+    <EntitySet Name="internal__measurement1" EntityType="InfluxDBSchema.internal__measurement1"/>
+<EntitySet Name="database1__measurement1" EntityType="InfluxDBSchema.database1__measurement1"/>
+    </EntityContainer>
+    <EntityType Name="internal__measurement1"><Key><PropertyRef Name="time" /></Key><Property Name="time" Type="Edm.DateTime" Nullable="false" />
+<Property Name="float_field" Type="Edm.Double" Nullable="true" />
+<Property Name="tag1" Type="Edm.String" Nullable="true" />
+<Property Name="int_field" Type="Edm.Int64" Nullable="true" />
+<Property Name="tag2" Type="Edm.String" Nullable="true" /></EntityType>
+<EntityType Name="database1__measurement1"><Key><PropertyRef Name="time" /></Key><Property Name="time" Type="Edm.DateTime" Nullable="false" />
+<Property Name="float_field" Type="Edm.Double" Nullable="true" />
+<Property Name="tag1" Type="Edm.String" Nullable="true" />
+<Property Name="int_field" Type="Edm.Int64" Nullable="true" />
+<Property Name="tag2" Type="Edm.String" Nullable="true" /></EntityType>
+    
+        </Schema>
+    </edmx:DataServices>
+</edmx:Edmx>
