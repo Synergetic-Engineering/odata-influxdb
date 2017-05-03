@@ -2,7 +2,11 @@ import random
 import re
 import unittest
 import os
-from responses import RequestsMock
+try:
+    from responses import RequestsMock
+except ImportError as e:
+    print('unit tests require responses library: try `pip install responses`')
+    raise e
 from server import generate_metadata, get_sample_config, load_metadata
 from pyslet.odata2 import core
 
