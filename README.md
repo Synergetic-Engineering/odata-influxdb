@@ -1,5 +1,7 @@
 # influxdb_odata
 
+[![Build Status](https://travis-ci.org/Synergetic-Engineering/odata-influxdb.svg?branch=master)](https://travis-ci.org/Synergetic-Engineering/odata-influxdb) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 This project allows you to use the [OData REST API](http://www.odata.org/) to access [InfluxDB](https://www.influxdata.com/) data.
 
 ## Requirements:
