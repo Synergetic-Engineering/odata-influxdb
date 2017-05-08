@@ -8,7 +8,7 @@ except ImportError as e:
     print('unit tests require responses library: try `pip install responses`')
     raise e
 from server import generate_metadata, get_sample_config, load_metadata
-from influxdbmeta import mangle_measurement_name, mangle_db_name
+from influxdbmeta import db_name__measurement_name, mangle_db_name, mangle_measurement_name
 from influxdbds import unmangle_measurement_name, unmangle_db_name, unmangle_entity_set_name
 from pyslet.odata2 import core
 
@@ -31,7 +31,8 @@ json_measurement_list = {
             "name": "measurements",
             "columns": ["name"],
             "values": [
-                ["measurement1"]]}]}]}
+                ["measurement1"],
+                ["measurement with spaces"]]}]}]}
 
 json_tag_keys = {
     "results": [{
@@ -102,6 +103,14 @@ class TestInfluxOData(unittest.TestCase):
                     json=json_measurement_list, match_querystring=True)
             rsp.add(rsp.GET, re.compile('.*SHOW\+MEASUREMENTS.*'),
                     json=json_measurement_list, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+FIELD\+KEYS.*'),
+                    json=json_field_keys, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+TAG\+KEYS.*'),
+                    json=json_tag_keys, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+FIELD\+KEYS.*'),
+                    json=json_field_keys, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SHOW\+TAG\+KEYS.*'),
+                    json=json_tag_keys, match_querystring=True)
             rsp.add(rsp.GET, re.compile('.*SHOW\+FIELD\+KEYS.*'),
                     json=json_field_keys, match_querystring=True)
             rsp.add(rsp.GET, re.compile('.*SHOW\+TAG\+KEYS.*'),
@@ -210,7 +219,12 @@ class TestUtilFunctions(unittest.TestCase):
         self.assertNotEqual(mangled[0], '_')
         self.assertEqual('_internal', unmangled)
 
-        mangled = mangle_measurement_name('testdb', 'Testing 123')
+        mangled = mangle_measurement_name('test with spaces')
+        unmangled = unmangle_measurement_name(mangled)
+        self.assertNotIn(' ', mangled)
+        self.assertEqual('test with spaces', unmangled)
+
+        mangled = db_name__measurement_name('testdb', 'Testing 123')
         db, unmangled = unmangle_entity_set_name(mangled)
         self.assertNotIn(' ', mangled)
         self.assertEqual('Testing 123', unmangled)
