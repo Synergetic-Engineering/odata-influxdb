@@ -32,10 +32,13 @@ def get_edm_type(influx_type):
 
 
 def mangle_measurement_name(db_name, m_name):
+    """corresponds to unmangle_measurement_name in influxdbds.py"""
+    m_name = m_name.replace(' ', '__sp__')
     return '{}__{}'.format(db_name, m_name).strip('_')  # edmx names cannot begin with '_'
 
 
 def mangle_db_name(db_name):
+    """corresponds to unmangle_db_name in influxdbds.py"""
     return db_name.strip('_')  # edmx names cannot begin with '_'
 
 
