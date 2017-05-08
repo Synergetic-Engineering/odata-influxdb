@@ -78,10 +78,6 @@ class InfluxDBMeasurement(EntityCollection):
         self.container = container
         self.db_name, self.measurement_name = unmangle_entity_set_name(self.entity_set.name)
         self.topmax = getattr(self.container, '_topmax', 50)
-        self._query_options = {}
-
-    def SetCustomQueryOptions(self, queryOptions):
-        self._query_options.update(dict(option.split('=') for option in queryOptions))
 
     @lru_cache()
     def _query_len(self):
