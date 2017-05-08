@@ -48,7 +48,26 @@ class InfluxDBEntityContainer(object):
         return InfluxDBMeasurement
 
 
+def unmangle_db_name(db_name):
+    """corresponds to mangle_db_name in influxdbmeta.py"""
+    if db_name == u'internal':
+        db_name = u'_internal'
+    return db_name
+
+
 # noinspection SqlDialectInspection
+def unmangle_measurement_name(measurement_name):
+    """corresponds to mangle_measurement_name in influxdbmeta.py"""
+    return measurement_name.replace('__sp__', ' ')
+
+
+def unmangle_entity_set_name(name):
+    db_name, m_name = name.split('__', 1)
+    db_name = unmangle_db_name(db_name)
+    m_name = unmangle_measurement_name(m_name)
+    return db_name, m_name
+
+
 class InfluxDBMeasurement(EntityCollection):
     """represents a measurement query, containing points
 
@@ -57,10 +76,12 @@ class InfluxDBMeasurement(EntityCollection):
     def __init__(self, container, **kwargs):
         super(InfluxDBMeasurement, self).__init__(**kwargs)
         self.container = container
-        self.db_name, self.measurement_name = self.entity_set.name.split('__')
-        if self.db_name == u'internal':
-            self.db_name = u'_internal'
+        self.db_name, self.measurement_name = unmangle_entity_set_name(self.entity_set.name)
         self.topmax = getattr(self.container, '_topmax', 50)
+        self._query_options = {}
+
+    def SetCustomQueryOptions(self, queryOptions):
+        self._query_options.update(dict(option.split('=') for option in queryOptions))
 
     @lru_cache()
     def _query_len(self):
@@ -105,6 +126,7 @@ class InfluxDBMeasurement(EntityCollection):
             self._limit_expression(),
         ).strip()
         logging.debug('Querying InfluxDB: {}'.format(q))
+
         result = self.container.client.query(q, database=self.db_name)
         fields = get_tags_and_field_keys(self.container.client, self.measurement_name, self.db_name)
         for m in result[self.measurement_name]:

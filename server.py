@@ -1,13 +1,18 @@
 import argparse
 import logging
 import os
+import string
 import sys
+import traceback
+from pydoc import html
 from urlparse import urlparse
 from ConfigParser import ConfigParser
 from wsgiref.simple_server import make_server
 
 import pyslet.odata2.metadata as edmx
-from pyslet.odata2.server import ReadOnlyServer
+import pyslet.odata2.core as core
+from pyslet.http import params
+from pyslet.odata2.server import ReadOnlyServer, WSGIWrapper, Server
 
 from influxdbmeta import generate_metadata
 from influxdbds import InfluxDBEntityContainer
@@ -17,6 +22,53 @@ cache_app = None  #: our Server instance
 logging.basicConfig()
 logger = logging.getLogger("odata-influxdb")
 logger.setLevel(logging.INFO)
+
+
+class ReadOnlyServerWithCustomOptions(ReadOnlyServer):
+    def __init__(self, *args, **kwargs):
+        super(ReadOnlyServerWithCustomOptions, self).__init__(*args, **kwargs)
+
+    def ReturnEntityCollection(
+            self,
+            entities,
+            request,
+            environ,
+            start_response,
+            response_headers):
+        """Returns an iterable of Entities."""
+        responseType = self.ContentNegotiation(
+            request, environ, self.FeedTypes)
+        if responseType is None:
+            return self.ODataError(
+                request,
+                environ,
+                start_response,
+                "Not Acceptable",
+                'xml, json or plain text formats supported',
+                406)
+        entities.TopMax(self.topmax)
+        ### ---- CUSTOM OPTIONS CODE  ---- ###
+
+        if callable(getattr(entities, 'SetCustomQueryOptions', None)):
+            entities.SetCustomQueryOptions(request.queryOptions)
+        ### ---- /CUSTOM OPTIONS CODE ---- ###
+        if responseType == "application/json":
+            data = str('{"d":%s}' % string.join(
+                entities.generate_entity_set_in_json(request.version), ''))
+        else:
+            # Here's a challenge, we want to pull data through the feed
+            # by yielding strings just load in to memory at the moment
+            f = core.Feed(None, entities)
+            doc = core.Document(root=f)
+            f.collection = entities
+            f.SetBase(str(self.serviceRoot))
+            data = str(doc)
+        response_headers.append(("Content-Type", str(responseType)))
+        response_headers.append(("Content-Length", str(len(data))))
+        start_response("%i %s" % (200, "Success"), response_headers)
+        return [data]
+
+
 
 
 class FileExistsError(IOError):
@@ -52,7 +104,7 @@ def load_metadata(config):
 
 def configure_app(c, doc):
     service_root = c.get('server', 'server_root')
-    app = ReadOnlyServer(serviceRoot=service_root)
+    app = ReadOnlyServerWithCustomOptions(serviceRoot=service_root)
     app.SetModel(doc)
     return app
 

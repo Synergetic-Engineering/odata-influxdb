@@ -8,6 +8,8 @@ except ImportError as e:
     print('unit tests require responses library: try `pip install responses`')
     raise e
 from server import generate_metadata, get_sample_config, load_metadata
+from influxdbmeta import mangle_measurement_name, mangle_db_name
+from influxdbds import unmangle_measurement_name, unmangle_db_name, unmangle_entity_set_name
 from pyslet.odata2 import core
 
 NUM_TEST_POINTS = 100
@@ -195,6 +197,23 @@ class TestInfluxOData(unittest.TestCase):
 
                 for e in collection._generate_entities():
                     self.assertIsInstance(e, core.Entity)
+
+
+class TestUtilFunctions(unittest.TestCase):
+    def test_name_mangling(self):
+        mangled = mangle_db_name('test')
+        unmangled = unmangle_db_name(mangled)
+        self.assertEqual('test', unmangled)
+
+        mangled = mangle_db_name('_internal')
+        unmangled = unmangle_db_name(mangled)
+        self.assertNotEqual(mangled[0], '_')
+        self.assertEqual('_internal', unmangled)
+
+        mangled = mangle_measurement_name('testdb', 'Testing 123')
+        db, unmangled = unmangle_entity_set_name(mangled)
+        self.assertNotIn(' ', mangled)
+        self.assertEqual('Testing 123', unmangled)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,12 @@
 language: python
 python:
   - "2.7"
-# command to install dependencies
 install: "pip install -r requirements.txt responses"
-# command to run tests
 script: python tests.py
+notifications:
+  email: false
+  slack:
+    rooms:
+    - secure: RUi6TJ5a0+kSt3kPI4fB048/Euz8+IX2cRZuwUJ0FMuFKKiZDz9e7ltfFfkeglyEM32qdtzJAX6xhFxOkUFigs8iGkWGZqsVuehOYDXI7Kqsd6WSKyiPio48VApi/9ILSONeQWT0bqvxQ/jsA5XpYoZBCmDPL99u1DPO3oMt2fkhhFibZMOgkqEtK6CPa8eFZOvLC+tJOQr7fBPlPreEgvGIC3ZL7nBPonHhS2eLCBOdJUyzv4EPH/N3Js0kowLNL6NfPg1v9AVzfVtKDyKqdAnUpdPqsvQw+S985rTYBZZ+4VihcGMzzAOSyp3qYieYHvGgsOY/N+x3ytx7RUp7p82b6WMEg0D5MYNXZlL6HbwWob/vRuvYp9d4zdlUohO8FE4AssrBTBtGXZng68Eng9uo2F4Kc5flSDdrCifPs2tb1mlTWnmwogVEQcWzUeHZEHdBCYlE/PyzWQCFSWMkMV63MeweAVOpSye15Hv64/QmybSVRclGOAGPH/iKsgWc99hCIC11I56tZY3Cb0d7eakVRuemYXeAXHRjnUDai0XCt6Pp/DgRClyw8a/IugsI6mBKwVYUXGJMEumPrS11cu8tIvBNbHseP4NYwX8hUysy3TklJAQsp7lHQFUqkqaHf41eg0aawFsyl5FftYwwmAEBIsMW7E6K2np8qMZtt6c=
+    on_success: always
+    on_failure: always
