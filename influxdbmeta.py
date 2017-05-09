@@ -31,15 +31,23 @@ def get_edm_type(influx_type):
         return influx_type_to_edm_type[influx_type]
 
 
-def mangle_measurement_name(db_name, m_name):
+def mangle_measurement_name(m_name):
     """corresponds to unmangle_measurement_name in influxdbds.py"""
     m_name = m_name.replace(' ', '__sp__')
-    return '{}__{}'.format(db_name, m_name).strip('_')  # edmx names cannot begin with '_'
+    return m_name
 
 
 def mangle_db_name(db_name):
     """corresponds to unmangle_db_name in influxdbds.py"""
     return db_name.strip('_')  # edmx names cannot begin with '_'
+
+
+def db_name__measurement_name(db_name, m_name):
+    m_name = m_name.replace(' ', '__sp__')
+    return '{}__{}'.format(
+        mangle_db_name(db_name),
+        mangle_measurement_name(m_name)
+    )
 
 
 class InfluxDB(object):
@@ -70,7 +78,8 @@ class InfluxDB(object):
                 d = dict(m)
                 d['db_name'] = db['name']
                 d['mangled_db'] = mangle_db_name(db['name'])
-                d['mangled_name'] = mangle_measurement_name(db['name'], m['name'])
+                d['mangled_measurement'] = mangle_measurement_name(m['name'])
+                d['mangled_path'] = db_name__measurement_name(db['name'], m['name'])
                 d['fields'] = self.fields(db['name'])
                 return d
             measurements.extend(m_dict(m) for m in rs.get_points())
@@ -83,7 +92,7 @@ class InfluxDB(object):
 
 
 def gen_entity_set_xml(m):
-    return '<EntitySet Name="{}" EntityType="InfluxDBSchema.{}"/>'.format(m['mangled_name'], m['mangled_name'])
+    return '<EntitySet Name="{}" EntityType="InfluxDBSchema.{}"/>'.format(m['mangled_path'], m['mangled_path'])
 
 
 def generate_properties_xml(m):
@@ -98,9 +107,8 @@ def generate_key_xml(m):
 
 
 def gen_entity_type_xml(m):
-    return '<EntityType Name="{}__{}">{}\n{}</EntityType>'.format(
-        m['mangled_db'],
-        m['name'],
+    return '<EntityType Name="{}">{}\n{}</EntityType>'.format(
+        m['mangled_path'],
         generate_key_xml(m),
         generate_properties_xml(m))
 
