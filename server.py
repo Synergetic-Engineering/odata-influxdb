@@ -90,8 +90,9 @@ def configure_server(c, app):
 
 def start_server(c, doc):
     app = configure_app(c, doc)
-    app = HTTPAuthPassThrough(app)
-    app = local_manager.make_middleware(app)
+    if c.getboolean('influxdb', 'authentication_required'):
+        app = HTTPAuthPassThrough(app)
+        app = local_manager.make_middleware(app)
     from werkzeug.serving import run_simple
     logger.info("Starting HTTP server on port %i..." % 8080)
     run_simple('localhost', 8080, application=app)
@@ -108,8 +109,12 @@ def get_sample_config():
     config.set('metadata', 'metadata_file', 'test_metadata.xml')
     config.add_section('influxdb')
     config.set('influxdb', '; supported schemes include https+influxdb:// and udp+influxdb://')
+    config.set('influxdb', '; user:pass in this dsn is used for generating metadata')
     config.set('influxdb', 'dsn', 'influxdb://user:pass@localhost:8086')
     config.set('influxdb', 'max_items_per_query', '50')
+    config.set('influxdb', '; authentication_required will pass through http basic auth username')
+    config.set('influxdb', '; and password to influxdb')
+    config.set('influxdb', 'authentication_required', 'no')
     return config
 
 

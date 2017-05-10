@@ -130,8 +130,10 @@ class InfluxDBMeasurement(EntityCollection):
     def _generate_entities(self):
         # SELECT_clause [INTO_clause] FROM_clause [WHERE_clause]
         # [GROUP_BY_clause] [ORDER_BY_clause] LIMIT_clause OFFSET <N> [SLIMIT_clause]
-
-        auth = getattr(request, 'authorization', None)
+        if request:
+            auth = getattr(request, 'authorization', None)
+        else:
+            auth = None
         if auth is not None:
             self.container.client.switch_user(auth.username, auth.password)
         else:
