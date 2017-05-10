@@ -5,6 +5,7 @@ import influxdb
 from functools32 import lru_cache
 from pyslet.odata2.core import EntityCollection, CommonExpression, PropertyExpression, BinaryExpression, \
     LiteralExpression, Operator
+from local import request
 
 operator_symbols = {
     Operator.lt: ' < ',
@@ -90,6 +91,8 @@ class InfluxDBMeasurement(EntityCollection):
         self.container = container
         self.db_name, self.measurement_name = unmangle_entity_set_name(self.entity_set.name)
         self.topmax = getattr(self.container, '_topmax', 50)
+        self.default_user = self.container.client._username
+        self.default_pass = self.container.client._password
 
     @lru_cache()
     def _query_len(self):
@@ -127,6 +130,12 @@ class InfluxDBMeasurement(EntityCollection):
     def _generate_entities(self):
         # SELECT_clause [INTO_clause] FROM_clause [WHERE_clause]
         # [GROUP_BY_clause] [ORDER_BY_clause] LIMIT_clause OFFSET <N> [SLIMIT_clause]
+
+        auth = getattr(request, 'authorization', None)
+        if auth is not None:
+            self.container.client.switch_user(auth.username, auth.password)
+        else:
+            self.container.client.switch_user(self.default_user, self.default_pass)
         q = u'SELECT * FROM "{}" {} {} {}'.format(
             self.measurement_name,
             self._where_expression(),

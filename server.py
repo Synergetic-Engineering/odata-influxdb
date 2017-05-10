@@ -1,18 +1,16 @@
 import argparse
 import logging
 import os
-import string
 import sys
-import traceback
-from pydoc import html
 from urlparse import urlparse
 from ConfigParser import ConfigParser
 from wsgiref.simple_server import make_server
+from werkzeug.wrappers import AuthorizationMixin, BaseRequest, Response
+from local import local, local_manager
+
 
 import pyslet.odata2.metadata as edmx
-import pyslet.odata2.core as core
-from pyslet.http import params
-from pyslet.odata2.server import ReadOnlyServer, WSGIWrapper, Server
+from pyslet.odata2.server import ReadOnlyServer
 
 from influxdbmeta import generate_metadata
 from influxdbds import InfluxDBEntityContainer
@@ -22,6 +20,28 @@ cache_app = None  #: our Server instance
 logging.basicConfig()
 logger = logging.getLogger("odata-influxdb")
 logger.setLevel(logging.INFO)
+
+
+class Request(BaseRequest, AuthorizationMixin):
+    pass
+
+
+class HTTPAuthPassThrough(object):
+    def __init__(self, app):
+        self.wrapped = app
+        self.realm = 'influxdb'
+
+    def __call__(self, environ, start_response):
+        local.request = req = Request(environ)
+        if req.authorization is None:
+            resp = Response('Unauthorized. Please supply authorization.',
+                            status=401,
+                            headers={
+                                ('WWW-Authenticate', 'Basic Realm="{}"'.format(self.realm)),
+                            }
+            )
+            return resp(environ, start_response)
+        return self.wrapped(environ, start_response)
 
 
 class FileExistsError(IOError):
@@ -70,10 +90,11 @@ def configure_server(c, app):
 
 def start_server(c, doc):
     app = configure_app(c, doc)
-    server = configure_server(c, app)
-    logger.info("Starting HTTP server on port %i..." % server.server_port)
-    # Respond to requests until process is killed
-    server.serve_forever()
+    app = HTTPAuthPassThrough(app)
+    app = local_manager.make_middleware(app)
+    from werkzeug.serving import run_simple
+    logger.info("Starting HTTP server on port %i..." % 8080)
+    run_simple('localhost', 8080, application=app)
 
 
 def get_sample_config():
@@ -90,6 +111,7 @@ def get_sample_config():
     config.set('influxdb', 'dsn', 'influxdb://user:pass@localhost:8086')
     config.set('influxdb', 'max_items_per_query', '50')
     return config
+
 
 def make_sample_config():
     config = get_sample_config()
