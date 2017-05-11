@@ -76,7 +76,10 @@ def load_metadata(config):
 
 
 def configure_app(c, doc):
-    service_root = c.get('server', 'server_root')
+    service_root = (c.get('server', 'service_advertise_root')
+        if c.has_option('server', 'service_advertise_root')
+        else c.get('server', 'server_root'))
+    logger.info("Advertising service at %s" % service_root)
     app = ReadOnlyServer(serviceRoot=service_root)
     app.SetModel(doc)
     return app
