@@ -121,8 +121,9 @@ class TestInfluxOData(unittest.TestCase):
                     json=json_tag_keys, match_querystring=True)
 
             metadata = generate_metadata('influxdb://localhost:8086')
-        file1 = open(os.path.join('test_data', 'test_metadata.xml'), 'rb').read()
-        self.assertEqual(metadata, file1)
+        file1 = open(os.path.join('test_data', 'test_metadata.xml'), 'r').read()
+        #open(os.path.join('test_data', 'tmp_metadata.xml'), 'wb').write(metadata)
+        self.assert_(metadata == file1)
 
     def test_where_clause(self):
         first_feed = next(self._container.itervalues())

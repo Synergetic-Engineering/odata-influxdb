@@ -68,6 +68,18 @@ def unmangle_entity_set_name(name):
     return db_name, m_name
 
 
+def parse_influxdb_time(t_str):
+    """
+    returns a `datetime` object (some precision from influxdb may be lost)
+    :type t_str: str
+    :param t_str: a string representing the time from influxdb (ex. '2017-01-01T23:01:41.123456789Z')
+    """
+    try:
+        return datetime.datetime.strptime(t_str[:26].rstrip('Z'), '%Y-%m-%dT%H:%M:%S.%f')
+    except ValueError:
+        return datetime.datetime.strptime(t_str[:19], '%Y-%m-%dT%H:%M:%S')
+
+
 class InfluxDBMeasurement(EntityCollection):
     """represents a measurement query, containing points
 
@@ -126,7 +138,7 @@ class InfluxDBMeasurement(EntityCollection):
         result = self.container.client.query(q, database=self.db_name)
         fields = get_tags_and_field_keys(self.container.client, self.measurement_name, self.db_name)
         for m in result[self.measurement_name]:
-            t = datetime.datetime.strptime(m['time'], '%Y-%m-%dT%H:%M:%SZ')
+            t = parse_influxdb_time(m['time'])
             e = self.new_entity()
             e['time'].set_from_value(t)
             for f in fields:

@@ -103,7 +103,7 @@ def generate_properties_xml(m):
 
 def generate_key_xml(m):
     """influxdb has no concept of a key, so we use the time value (NOT gauranteed to be unique)"""
-    return '<Key><PropertyRef Name="time" /></Key><Property Name="time" Type="Edm.DateTime" Nullable="false" />'
+    return '<Key><PropertyRef Name="time" /></Key><Property Name="time" Type="Edm.DateTime" Precision="6" Nullable="false" />'
 
 
 def gen_entity_type_xml(m):
