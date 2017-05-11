@@ -1,3 +1,4 @@
 pyslet
 influxdb
 functools32
+werkzeug
