@@ -76,20 +76,11 @@ def load_metadata(config):
 
 
 def configure_app(c, doc):
-    if c.has_option('server', 'service_advertise_root'):
-        service_root = c.get('server', 'service_advertise_root')
-        logger.info("Advertising service at %s" % service_root)
-    else:
-        service_root = c.get('server', 'server_root')
+    service_root = c.get('server', 'service_advertise_root')
+    logger.info("Advertising service at %s" % service_root)
     app = ReadOnlyServer(serviceRoot=service_root)
     app.SetModel(doc)
     return app
-
-
-def configure_server(c, app):
-    url = urlparse(c.get('server', 'server_root'))
-    server = make_server(url.hostname, url.port, app)
-    return server
 
 
 def start_server(c, doc):
@@ -98,14 +89,15 @@ def start_server(c, doc):
         app = HTTPAuthPassThrough(app)
         app = local_manager.make_middleware(app)
     from werkzeug.serving import run_simple
-    logger.info("Starting HTTP server on port %i..." % 8080)
-    run_simple('localhost', 8080, application=app)
+    url = urlparse(c.get('server', 'service_advertise_root'))
+    logger.info("Starting HTTP server on port %i..." % url.port)
+    run_simple(url.hostname, url.port, application=app)
 
 
 def get_sample_config():
     config = ConfigParser(allow_no_value=True)
     config.add_section('server')
-    config.set('server', 'server_root', 'http://localhost:8080')
+    config.set('server', 'service_advertise_root', 'http://localhost:8080')
     config.add_section('metadata')
     config.set('metadata', '; set autogenerate to "no" for quicker startup of the server if you know your influxdb structure has not changed')
     config.set('metadata', 'autogenerate', 'yes')
@@ -134,7 +126,7 @@ def make_sample_config():
 
 def get_config(config):
     with open(config, 'r') as fp:
-        c = ConfigParser()
+        c = get_sample_config()
         c.readfp(fp)
     return c
 
