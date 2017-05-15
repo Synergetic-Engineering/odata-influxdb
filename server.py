@@ -89,15 +89,18 @@ def start_server(c, doc):
         app = HTTPAuthPassThrough(app)
         app = local_manager.make_middleware(app)
     from werkzeug.serving import run_simple
-    url = urlparse(c.get('server', 'service_advertise_root'))
-    logger.info("Starting HTTP server on port %i..." % url.port)
-    run_simple(url.hostname, url.port, application=app)
+    listen_interface = c.get('server', 'server_listen_interface')
+    listen_port = int(c.get('server', 'server_listen_port'))
+    logger.info("Starting HTTP server on: interface: %s, port: %i..." % (listen_interface, listen_port))
+    run_simple(listen_interface, listen_port, application=app)
 
 
 def get_sample_config():
     config = ConfigParser(allow_no_value=True)
     config.add_section('server')
     config.set('server', 'service_advertise_root', 'http://localhost:8080')
+    config.set('server', 'server_listen_interface', '127.0.0.1')
+    config.set('server', 'server_listen_port', 8080)
     config.add_section('metadata')
     config.set('metadata', '; set autogenerate to "no" for quicker startup of the server if you know your influxdb structure has not changed')
     config.set('metadata', 'autogenerate', 'yes')
