@@ -90,3 +90,6 @@ ENV/
 /*.conf
 .idea/
 /generated.xml
+
+# any generated xml files
+*.xml
