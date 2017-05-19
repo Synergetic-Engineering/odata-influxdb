@@ -107,6 +107,36 @@ class InfluxDBMeasurement(EntityCollection):
     def __len__(self):
         return self._query_len()
 
+    def set_expand(self, expand, select=None):
+        """Sets the expand and select query options for this collection.
+
+        The expand query option causes the named navigation properties
+        to be expanded and the associated entities to be loaded in to
+        the entity instances before they are returned by this collection.
+
+        *expand* is a dictionary of expand rules.  Expansions can be chained,
+        represented by the dictionary entry also being a dictionary::
+
+                # expand the Customer navigation property...
+                { 'Customer': None }
+                # expand the Customer and Invoice navigation properties
+                { 'Customer':None, 'Invoice':None }
+                # expand the Customer property and then the Orders property within Customer
+                { 'Customer': {'Orders':None} }
+
+        The select query option restricts the properties that are set in
+        returned entities.  The *select* option is a similar dictionary
+        structure, the main difference being that it can contain the
+        single key '*' indicating that all *data* properties are
+        selected."""
+        self.entity_set.entityType.ValidateExpansion(expand, select)
+        self.expand = expand
+        # in influxdb, you must always query at LEAST the time field
+        if select is not None and 'timestamp' not in select:
+            select['timestamp'] = None
+        self.select = select
+        self.lastEntity = None
+
     def expand_entities(self, entityIterable):
         """Utility method for data providers.
 
@@ -138,37 +168,74 @@ class InfluxDBMeasurement(EntityCollection):
             self.container.client.switch_user(auth.username, auth.password)
         else:
             self.container.client.switch_user(self.default_user, self.default_pass)
-        q = u'SELECT * FROM "{}" {} {} {}'.format(
+        q = u'SELECT {} FROM "{}" {} {} {}'.format(
+            self._select_expression(),
             self.measurement_name,
             self._where_expression(),
             self._orderby_expression(),
             self._limit_expression(),
         ).strip()
         logging.debug('Querying InfluxDB: {}'.format(q))
+        print(q)
 
         result = self.container.client.query(q, database=self.db_name)
         fields = get_tags_and_field_keys(self.container.client, self.measurement_name, self.db_name)
         for m in result[self.measurement_name]:
             t = parse_influxdb_time(m['time'])
             e = self.new_entity()
-            e['time'].set_from_value(t)
-            for f in fields:
-                e[f].set_from_value(m[f])
+            e['timestamp'].set_from_value(t)
+            if self.select is None or '*' in self.select:
+                for f in fields:
+                    e[f].set_from_value(m[f])
+            else:
+                for f in (k for k in self.select if k != 'timestamp'):  # time has already been set
+                    e[f].set_from_value(m[f])
             e.exists = True
             self.lastEntity = e
             yield e
 
+    def _select_expression(self):
+        if self.select is None or '*' in self.select:
+            return '*'
+        else:
+            return ','.join(('"{}"'.format(k.strip())
+                               for k in self.select.keys()))
+
     def _where_expression(self):
         """generates a valid InfluxDB "WHERE" query part from the parsed filter (set with self.set_filter)"""
-        if self.filter is None:
+        return self._sql_where_expression(self.filter)
+
+    def _sql_where_expression(self, filter_expression):
+        if filter_expression is None:
             return ''
-        elif isinstance(self.filter, BinaryExpression):
-            expressions = (self.filter.operands[0],
-                           self.filter.operands[1])
-            symbol = operator_symbols[self.filter.operator]
+        elif isinstance(filter_expression, BinaryExpression):
+            expressions = (filter_expression.operands[0],
+                           filter_expression.operands[1])
+            symbol = operator_symbols[filter_expression.operator]
             return 'WHERE {}'.format(symbol.join(self._sql_expression(o) for o in expressions))
         else:
             raise NotImplementedError
+
+    def _groupby_expression(self):
+        # pprint(list(c.query('select MEAN("thermalConductance_pred") from "thermo" where time >= \'2016-01-01\' and time <= \'2017-05-17T23:59:59Z\' group by plant_name, plant_area, time(3d) ')[u'thermo']))
+        group_by = None
+        if request:
+            groupy_by_raw = request.args.get('influxgroupby', None)
+            if groupy_by_raw is not None:
+                group_by_raw = groupy_by_raw.strip().split(',')
+                group_by = []
+                for g in group_by_raw:
+                    if g[:4] == 'time':
+                        group_by.append(g)
+                    else:
+                        group_by.append(
+                            '"{}"'.format(g.strip(' "').replace('"', '\\"')))
+
+        if group_by is None:
+            return ''
+        else:
+            return 'GROUP BY {}'.format(','.join(group_by))
+
 
     def _orderby_expression(self):
         """generates a valid InfluxDB "ORDER BY" query part from the parsed order by clause (set with self.set_orderby)"""
@@ -186,6 +253,8 @@ class InfluxDBMeasurement(EntityCollection):
             return expression.name
         elif isinstance(expression, LiteralExpression):
             return self._format_literal(expression.value.value)
+        elif isinstance(expression, BinaryExpression):
+            return self._sql_where_expression(expression)
 
     def _format_literal(self, val):
         if isinstance(val, unicode):

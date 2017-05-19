@@ -143,6 +143,11 @@ class TestInfluxOData(unittest.TestCase):
         self.assertEqual(where, u"WHERE prop > -32.53425", msg="Correct where clause for eq operator (Float)")
         collection.close()
 
+    def test_groupby_expression(self):
+        first_feed = next(self._container.itervalues())
+        collection = first_feed.OpenCollection()
+        self.assertEqual(collection._groupby_expression(), '')
+
     def test_limit_expression(self):
         first_feed = next(self._container.itervalues())
         collection = first_feed.OpenCollection()
