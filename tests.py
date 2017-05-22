@@ -141,6 +141,8 @@ class TestInfluxOData(unittest.TestCase):
         self.assertEqual(where, u"WHERE prop > 0", msg="Correct where clause for gt operator (Int)")
         where = where_clause_from_string(u"prop gt -32.53425D")
         self.assertEqual(where, u"WHERE prop > -32.53425", msg="Correct where clause for eq operator (Float)")
+        where = where_clause_from_string(u"timestamp ge datetime'2016-01-01T00:00:00' and timestamp le datetime'2016-12-31T00:00:00'")
+        self.assertEqual(where, u"WHERE time >= '2016-01-01 00:00:00' AND time <= '2016-12-31 00:00:00'")
         collection.close()
 
     def test_groupby_expression(self):

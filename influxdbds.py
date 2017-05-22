@@ -3,15 +3,19 @@ import numbers
 import logging
 import influxdb
 from functools32 import lru_cache
+from pyslet.iso8601 import TimePoint
 from pyslet.odata2.core import EntityCollection, CommonExpression, PropertyExpression, BinaryExpression, \
     LiteralExpression, Operator
 from local import request
 
 operator_symbols = {
     Operator.lt: ' < ',
+    Operator.le: ' <= ',
     Operator.gt: ' > ',
+    Operator.ge: ' >= ',
     Operator.eq: ' = ',
-    Operator.ne: ' != '
+    Operator.ne: ' != ',
+    getattr(Operator, 'and'): ' AND '  # Operator.and doesn't resolve in Python
 }
 
 @lru_cache()
@@ -97,7 +101,12 @@ class InfluxDBMeasurement(EntityCollection):
     @lru_cache()
     def _query_len(self):
         """influxdb only counts non-null values, so we return the count of the field with maximum non-null values"""
-        q = u'SELECT COUNT(*) FROM "{}"'.format(self.measurement_name)
+        #todo: update query with filter
+        #q = u'SELECT COUNT(*) FROM "{}"'.format(self.measurement_name)
+        q = u'SELECT COUNT(*) FROM "{}" {}'.format(
+            self.measurement_name,
+            self._where_expression()
+        ).strip()
         self.container.client.switch_database(self.db_name)
         rs = self.container.client.query(q)
         max_count = max(val for val in rs.get_points().next().values() if isinstance(val, numbers.Number))
@@ -157,6 +166,10 @@ class InfluxDBMeasurement(EntityCollection):
         return self.expand_entities(
             self._generate_entities())
 
+    def _unmangle_influx_field(self, f):
+        influx_field = f
+        return influx_field
+
     def _generate_entities(self):
         # SELECT_clause [INTO_clause] FROM_clause [WHERE_clause]
         # [GROUP_BY_clause] [ORDER_BY_clause] LIMIT_clause OFFSET <N> [SLIMIT_clause]
@@ -168,10 +181,11 @@ class InfluxDBMeasurement(EntityCollection):
             self.container.client.switch_user(auth.username, auth.password)
         else:
             self.container.client.switch_user(self.default_user, self.default_pass)
-        q = u'SELECT {} FROM "{}" {} {} {}'.format(
+        q = u'SELECT {} FROM "{}" {} {} {} {}'.format(
             self._select_expression(),
             self.measurement_name,
             self._where_expression(),
+            self._groupby_expression(),
             self._orderby_expression(),
             self._limit_expression(),
         ).strip()
@@ -186,24 +200,45 @@ class InfluxDBMeasurement(EntityCollection):
             e['timestamp'].set_from_value(t)
             if self.select is None or '*' in self.select:
                 for f in fields:
-                    e[f].set_from_value(m[f])
+                    influx_field = self._unmangle_influx_field(f)
+                    try:
+                        e[f].set_from_value(m[influx_field])
+                    except KeyError:
+                        pass
             else:
                 for f in (k for k in self.select if k != 'timestamp'):  # time has already been set
-                    e[f].set_from_value(m[f])
+                    influx_field = self._unmangle_influx_field(f)
+                    e[f].set_from_value(m[influx_field])
             e.exists = True
             self.lastEntity = e
             yield e
 
     def _select_expression(self):
+        """formats the list of fields for the SQL SELECT statement, with aggregation functions if specified
+        with &aggregate=func in the querystring"""
+        field_format = u'{}'
+        if request:
+            aggregate_func = request.args.get('aggregate', None)
+            if aggregate_func is not None:
+                field_format = u'{}({{0}}) as {{0}}'.format(aggregate_func)
+
+        def select_key(spec_key):
+            return field_format.format(spec_key.strip())
+
         if self.select is None or '*' in self.select:
-            return '*'
+            return field_format.format(u'*')
         else:
-            return ','.join(('"{}"'.format(k.strip())
-                               for k in self.select.keys()))
+            # join the selected fields
+            # if specified, format aggregate: func(field) as field
+            # influxdb always returns the time field, and doesn't like it if you ask when there's a groupby anyway
+            return u','.join((select_key(k)
+                              for k in self.select.keys() if k != u'timestamp'))
 
     def _where_expression(self):
         """generates a valid InfluxDB "WHERE" query part from the parsed filter (set with self.set_filter)"""
-        return self._sql_where_expression(self.filter)
+        if self.filter is None:
+            return u''
+        return u'WHERE {}'.format(self._sql_where_expression(self.filter))
 
     def _sql_where_expression(self, filter_expression):
         if filter_expression is None:
@@ -212,30 +247,27 @@ class InfluxDBMeasurement(EntityCollection):
             expressions = (filter_expression.operands[0],
                            filter_expression.operands[1])
             symbol = operator_symbols[filter_expression.operator]
-            return 'WHERE {}'.format(symbol.join(self._sql_expression(o) for o in expressions))
+            return symbol.join(self._sql_expression(o) for o in expressions)
         else:
             raise NotImplementedError
 
     def _groupby_expression(self):
-        # pprint(list(c.query('select MEAN("thermalConductance_pred") from "thermo" where time >= \'2016-01-01\' and time <= \'2017-05-17T23:59:59Z\' group by plant_name, plant_area, time(3d) ')[u'thermo']))
         group_by = None
         if request:
+            group_by = []
             groupy_by_raw = request.args.get('influxgroupby', None)
-            if groupy_by_raw is not None:
+            if groupy_by_raw is not None and self.filter is not None:
                 group_by_raw = groupy_by_raw.strip().split(',')
-                group_by = []
                 for g in group_by_raw:
-                    if g[:4] == 'time':
-                        group_by.append(g)
-                    else:
-                        group_by.append(
-                            '"{}"'.format(g.strip(' "').replace('"', '\\"')))
-
-        if group_by is None:
+                    group_by.append(
+                        '"{}"'.format(g.strip(' "').replace('"', '\\"')))
+            group_by_time_raw = request.args.get('groupByTime', None)
+            if group_by_time_raw is not None:
+                group_by.append('time({})'.format(group_by_time_raw))
+        if len(group_by) == 0:
             return ''
         else:
             return 'GROUP BY {}'.format(','.join(group_by))
-
 
     def _orderby_expression(self):
         """generates a valid InfluxDB "ORDER BY" query part from the parsed order by clause (set with self.set_orderby)"""
@@ -250,6 +282,8 @@ class InfluxDBMeasurement(EntityCollection):
 
     def _sql_expression(self, expression):
         if isinstance(expression, PropertyExpression):
+            if expression.name == 'timestamp':
+                return 'time'
             return expression.name
         elif isinstance(expression, LiteralExpression):
             return self._format_literal(expression.value.value)
@@ -258,7 +292,9 @@ class InfluxDBMeasurement(EntityCollection):
 
     def _format_literal(self, val):
         if isinstance(val, unicode):
-            return "'{}'".format(val)
+            return u"'{}'".format(val)
+        elif isinstance(val, TimePoint):
+            return u"'{0.date} {0.time}'".format(val)
         else:
             return str(val)
 
