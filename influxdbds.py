@@ -1,12 +1,18 @@
 import datetime
 import numbers
 import logging
+import sys
 import influxdb
 from functools32 import lru_cache
 from pyslet.iso8601 import TimePoint
+import pyslet.rfc2396 as uri
 from pyslet.odata2.core import EntityCollection, CommonExpression, PropertyExpression, BinaryExpression, \
-    LiteralExpression, Operator
+    LiteralExpression, Operator, SystemQueryOption, FormatExpand, FormatSelect, ODataURI
+from pyslet.py2 import to_text
+
 from local import request
+
+logger = logging.getLogger("odata-influxdb")
 
 operator_symbols = {
     Operator.lt: ' < ',
@@ -98,18 +104,22 @@ class InfluxDBMeasurement(EntityCollection):
         self.default_user = self.container.client._username
         self.default_pass = self.container.client._password
 
-    @lru_cache()
+    #@lru_cache()
     def _query_len(self):
         """influxdb only counts non-null values, so we return the count of the field with maximum non-null values"""
-        #todo: update query with filter
-        #q = u'SELECT COUNT(*) FROM "{}"'.format(self.measurement_name)
-        q = u'SELECT COUNT(*) FROM "{}" {}'.format(
+        q = u'SELECT COUNT(*) FROM "{}" {} {}'.format(
             self.measurement_name,
-            self._where_expression()
+            self._where_expression(),
+            self._groupby_expression()
         ).strip()
         self.container.client.switch_database(self.db_name)
+        logger.info('Querying InfluxDB: {}'.format(q))
         rs = self.container.client.query(q)
-        max_count = max(val for val in rs.get_points().next().values() if isinstance(val, numbers.Number))
+        interval_list = list(rs.get_points())
+        if request and request.args.get('aggregate'):
+            max_count = len(interval_list)
+        else:
+            max_count = max(val for val in rs.get_points().next().values() if isinstance(val, numbers.Number))
         self._influxdb_len = max_count
         return max_count
 
@@ -166,9 +176,13 @@ class InfluxDBMeasurement(EntityCollection):
         return self.expand_entities(
             self._generate_entities())
 
-    def _unmangle_influx_field(self, f):
-        influx_field = f
-        return influx_field
+    def non_aggregate_field_name(self, f):
+        agg = request.args.get('aggregate').lower()
+        parts = f.split('_', 1)
+        if parts[0] == agg:
+            return parts[1]
+        else:
+            raise KeyError('invalid field received from influxdb: {}'.format(f))
 
     def _generate_entities(self):
         # SELECT_clause [INTO_clause] FROM_clause [WHERE_clause]
@@ -189,29 +203,40 @@ class InfluxDBMeasurement(EntityCollection):
             self._orderby_expression(),
             self._limit_expression(),
         ).strip()
-        logging.debug('Querying InfluxDB: {}'.format(q))
-        print(q)
+        logger.info('Querying InfluxDB: {}'.format(q))
 
         result = self.container.client.query(q, database=self.db_name)
-        fields = get_tags_and_field_keys(self.container.client, self.measurement_name, self.db_name)
-        for m in result[self.measurement_name]:
-            t = parse_influxdb_time(m['time'])
-            e = self.new_entity()
-            e['timestamp'].set_from_value(t)
-            if self.select is None or '*' in self.select:
-                for f in fields:
-                    influx_field = self._unmangle_influx_field(f)
-                    try:
-                        e[f].set_from_value(m[influx_field])
-                    except KeyError:
-                        pass
-            else:
-                for f in (k for k in self.select if k != 'timestamp'):  # time has already been set
-                    influx_field = self._unmangle_influx_field(f)
-                    e[f].set_from_value(m[influx_field])
-            e.exists = True
-            self.lastEntity = e
-            yield e
+        #fields = get_tags_and_field_keys(self.container.client, self.measurement_name, self.db_name)
+
+        for measurement_name, tag_set in result.keys():
+            for row in result[measurement_name, tag_set]:
+                e = self.new_entity()
+                t = parse_influxdb_time(row['time'])
+                e['timestamp'].set_from_value(t)
+                if self.select is None or '*' in self.select:
+                    for influxdb_field_name, influxdb_field_value in row.items():
+                        if influxdb_field_name == 'time':
+                            continue  # time has already been set
+                        try:
+                            entity_property = e[influxdb_field_name]
+                        except KeyError:
+                            # assume aggregated field
+                            entity_property = e[self.non_aggregate_field_name(influxdb_field_name)]
+                        entity_property.set_from_value(influxdb_field_value)
+                    if tag_set is not None:
+                        for tag, value in tag_set.items():
+                            e[tag].set_from_value(value)
+                else:
+                    for odata_field_name in self.select:
+                        if odata_field_name == 'timestamp':
+                            continue  # time has already been set
+                        if request and request.args.get('aggregate'):
+                            e[odata_field_name].set_from_value(
+                                row[request.args.get('aggregate') + '_' + odata_field_name])
+                        e[odata_field_name].set_from_value(row[odata_field_name])
+                e.exists = True
+                self.lastEntity = e
+                yield e
 
     def _select_expression(self):
         """formats the list of fields for the SQL SELECT statement, with aggregation functions if specified
@@ -223,10 +248,14 @@ class InfluxDBMeasurement(EntityCollection):
                 field_format = u'{}({{0}}) as {{0}}'.format(aggregate_func)
 
         def select_key(spec_key):
+            if spec_key == u'*':
+                tmp = field_format.format(spec_key)
+                if u"as *" in tmp:
+                    return tmp[:tmp.find(u"as *")]  # ... inelegant
             return field_format.format(spec_key.strip())
 
         if self.select is None or '*' in self.select:
-            return field_format.format(u'*')
+            return select_key(u'*')
         else:
             # join the selected fields
             # if specified, format aggregate: func(field) as field
@@ -255,12 +284,14 @@ class InfluxDBMeasurement(EntityCollection):
         group_by = None
         if request:
             group_by = []
-            groupy_by_raw = request.args.get('influxgroupby', None)
-            if groupy_by_raw is not None and self.filter is not None:
-                group_by_raw = groupy_by_raw.strip().split(',')
+            group_by_raw = request.args.get(u'influxgroupby', None)
+            if group_by_raw is not None and self.filter is not None:
+                group_by_raw = group_by_raw.strip().split(',')
                 for g in group_by_raw:
-                    group_by.append(
-                        '"{}"'.format(g.strip(' "').replace('"', '\\"')))
+                    if g == u'*':
+                        group_by.append(g)
+                    else:
+                        group_by.append(u'"{}"'.format(g))
             group_by_time_raw = request.args.get('groupByTime', None)
             if group_by_time_raw is not None:
                 group_by.append('time({})'.format(group_by_time_raw))
@@ -335,10 +366,45 @@ class InfluxDBMeasurement(EntityCollection):
             self.skiptoken = self.nextSkiptoken = None
         else:
             # yield one page
-            self.nextSkiptoken = (self.skiptoken or 0) + self.top
+            self.nextSkiptoken = (self.skiptoken or 0) + min(len(self), self.top)
             for e in self.itervalues():
                 yield e
             self.paging = False
+
+    def get_next_page_location(self):
+        """Returns the location of this page of the collection
+
+        The result is a :py:class:`rfc2396.URI` instance."""
+        token = self.next_skiptoken()
+        if token is not None:
+            baseURL = self.get_location()
+            sysQueryOptions = {}
+            if self.filter is not None:
+                sysQueryOptions[
+                    SystemQueryOption.filter] = unicode(self.filter)
+            if self.expand is not None:
+                sysQueryOptions[
+                    SystemQueryOption.expand] = FormatExpand(self.expand)
+            if self.select is not None:
+                sysQueryOptions[
+                    SystemQueryOption.select] = FormatSelect(self.select)
+            if self.orderby is not None:
+                sysQueryOptions[
+                    SystemQueryOption.orderby] = CommonExpression.OrderByToString(
+                    self.orderby)
+            sysQueryOptions[SystemQueryOption.skiptoken] = unicode(token)
+            extraOptions = ''
+            if request:
+                extraOptions = u'&' + u'&'.join([
+                                        u'{0}={1}'.format(k, v) for k, v in request.args.items() if k[0] != u'$'])
+            return uri.URI.from_octets(
+                str(baseURL) +
+                "?" +
+                ODataURI.FormatSysQueryOptions(sysQueryOptions) +
+                extraOptions
+            )
+        else:
+            return None
 
 
 
