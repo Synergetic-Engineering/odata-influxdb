@@ -139,6 +139,12 @@ class TestInfluxOData(unittest.TestCase):
         self.assertEqual(where, u"WHERE prop = 'test'", msg="Correct where clause for eq operator")
         where = where_clause_from_string(u"prop gt 0")
         self.assertEqual(where, u"WHERE prop > 0", msg="Correct where clause for gt operator (Int)")
+        where = where_clause_from_string(u"prop ge 0")
+        self.assertEqual(where, u"WHERE prop >= 0", msg="Correct where clause for ge operator (Int)")
+        where = where_clause_from_string(u"prop lt 0")
+        self.assertEqual(where, u"WHERE prop < 0", msg="Correct where clause for lt operator (Int)")
+        where = where_clause_from_string(u"prop le 0")
+        self.assertEqual(where, u"WHERE prop <= 0", msg="Correct where clause for le operator (Int)")
         where = where_clause_from_string(u"prop gt -32.53425D")
         self.assertEqual(where, u"WHERE prop > -32.53425", msg="Correct where clause for eq operator (Float)")
         where = where_clause_from_string(u"timestamp ge datetime'2016-01-01T00:00:00' and timestamp le datetime'2016-12-31T00:00:00'")
@@ -189,10 +195,6 @@ class TestInfluxOData(unittest.TestCase):
                     json=json_count(collection.name), match_querystring=True)
             rsp.add(rsp.GET, re_limit,
                     json=json_points_list('measurement1', page_size=page_size), match_querystring=True)
-            rsp.add(rsp.GET, re.compile('.*q=SHOW\+FIELD\+KEYS.*'),
-                    json=json_field_keys, match_querystring=True)
-            rsp.add(rsp.GET, re.compile('.*q=SHOW\+TAG\+KEYS.*'),
-                    json=json_tag_keys, match_querystring=True)
             rsp.add(rsp.GET, re_limit_offset,
                     json=json_points_list('measurement1', page_size=page_size), match_querystring=True)
 
@@ -207,10 +209,6 @@ class TestInfluxOData(unittest.TestCase):
             with RequestsMock() as rsp:
                 rsp.add(rsp.GET, re.compile('.*q=SELECT\+%2A\+FROM\+%22measurement1%22&'),
                         json=json_points_list(collection.name), match_querystring=True)
-                rsp.add(rsp.GET, re.compile('.*q=SHOW\+FIELD\+KEYS.*'),
-                        json=json_field_keys, match_querystring=True)
-                rsp.add(rsp.GET, re.compile('.*q=SHOW\+TAG\+KEYS.*'),
-                        json=json_tag_keys, match_querystring=True)
 
                 for e in collection._generate_entities():
                     self.assertIsInstance(e, core.Entity)
