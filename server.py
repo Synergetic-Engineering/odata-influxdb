@@ -17,9 +17,13 @@ from influxdbds import InfluxDBEntityContainer
 
 cache_app = None  #: our Server instance
 
-logging.basicConfig()
+#logging.basicConfig()
+logHandler = logging.StreamHandler(sys.stdout)
+logFormatter = logging.Formatter(fmt='%(levelname)s:%(name)s:%(message)s')
+#logHandler.formatter = logFormatter
 logger = logging.getLogger("odata-influxdb")
-logger.setLevel(logging.INFO)
+logger.addHandler(logHandler)
+logger.setLevel(logging.DEBUG)
 
 
 class Request(BaseRequest, AuthorizationMixin):
