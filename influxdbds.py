@@ -281,9 +281,8 @@ class InfluxDBMeasurement(EntityCollection):
             raise NotImplementedError
 
     def _groupby_expression(self):
-        group_by = None
+        group_by = []
         if request:
-            group_by = []
             group_by_raw = request.args.get(u'influxgroupby', None)
             if group_by_raw is not None and self.filter is not None:
                 group_by_raw = group_by_raw.strip().split(',')
