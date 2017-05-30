@@ -193,8 +193,14 @@ class TestInfluxOData(unittest.TestCase):
             re_limit_offset = re.compile('.*q=SELECT\+%2A\+FROM\+%22measurement1.*LIMIT\+200\+OFFSET\+200&')
             rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
                     json=json_count(collection.name), match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
+                    json=json_count(collection.name), match_querystring=True)
             rsp.add(rsp.GET, re_limit,
                     json=json_points_list('measurement1', page_size=page_size), match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
+                    json=json_count(collection.name), match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
+                    json=json_count(collection.name), match_querystring=True)
             rsp.add(rsp.GET, re_limit_offset,
                     json=json_points_list('measurement1', page_size=page_size), match_querystring=True)
 
