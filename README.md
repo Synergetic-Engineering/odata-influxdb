@@ -45,6 +45,54 @@ OData filter spec is supported, but has some limitations.
 Supported operators are:
 
 * gt (greater than, >)
+* ge (greater than or equal to, >=)
 * lt (less than, <)
+* le (less than or equal to, <=)
 * eq (equals, =)
 * ne (not equal to, !=)
+* and (boolean and)
+
+## Grouping
+
+This project currently depends on pyslet currently gives us OData 2 
+support, which does not include grouping, so this project provies
+a non-standard implementation of grouping operations. Because of this,
+you cannot use GUI tools to form the grouping queries.
+
+*InfluxDB requires a WHERE clause on the time field when grouping by time.*
+
+*The release version of pyslet had a [bug](https://github.com/swl10/pyslet/issues/71) (now fixed) where you could not use
+a field called "time" so use "timestamp" to refer to InfluxDB's "time" field.*
+
+### Example queries:
+
+#### Group by day. Aggregate the mean of each field.
+
+Query URL:
+```
+/db?$filter=timestamp ge datetime'2017-01-01T00:00:00' and timestamp le datetime'2017-03-01T00:00:00'&$top=1000&groupByTime=1h&aggregate=mean
+
+```
+
+Resulting InfluxDB query:
+```
+SELECT mean(*) FROM measurement 
+  WHERE time >= '2017-01-01 AND time <= '2017-03-01'
+  GROUP BY time(1d) 
+```
+
+#### Group by day. Aggregate the mean of each field. Also group by all tag keys
+
+Query URL:
+```
+/db?$filter=timestamp ge datetime'2017-01-01T00:00:00' and timestamp le datetime'2017-03-01T00:00:00'&$top=1000&groupByTime=1h&aggregate=mean&influxgroupby=*
+
+```
+
+Resulting InfluxDB query:
+```
+SELECT mean(*) FROM measurement 
+  WHERE time >= '2017-01-01' AND time <= '2017-03-01' 
+  GROUP BY *,time(1d) 
+```
+
