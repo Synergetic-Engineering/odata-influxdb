@@ -104,7 +104,7 @@ def get_sample_config():
     config.add_section('server')
     config.set('server', 'service_advertise_root', 'http://localhost:8080')
     config.set('server', 'server_listen_interface', '127.0.0.1')
-    config.set('server', 'server_listen_port', 8080)
+    config.set('server', 'server_listen_port', '8080')
     config.add_section('metadata')
     config.set('metadata', '; set autogenerate to "no" for quicker startup of the server if you know your influxdb structure has not changed')
     config.set('metadata', 'autogenerate', 'yes')
