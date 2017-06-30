@@ -63,13 +63,16 @@ def unmangle_db_name(db_name):
     """corresponds to mangle_db_name in influxdbmeta.py"""
     if db_name == u'internal':
         db_name = u'_internal'
+    db_name = db_name.replace('_dsh_', '-')
     return db_name
 
 
 # noinspection SqlDialectInspection
 def unmangle_measurement_name(measurement_name):
     """corresponds to mangle_measurement_name in influxdbmeta.py"""
-    return measurement_name.replace('__sp__', ' ')
+    measurement_name = measurement_name.replace('_sp_', ' ')
+    measurement_name = measurement_name.replace('_dsh_', '-')
+    return measurement_name
 
 
 def unmangle_entity_set_name(name):
@@ -404,8 +407,3 @@ class InfluxDBMeasurement(EntityCollection):
             )
         else:
             return None
-
-
-
-
-

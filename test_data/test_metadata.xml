@@ -9,16 +9,16 @@
                 xsi:schemaLocation="http://schemas.microsoft.com/ado/2006/04/edm ">
     <EntityContainer Name="InfluxDB" m:IsDefaultEntityContainer="true">
     <EntitySet Name="internal__measurement1" EntityType="InfluxDBSchema.internal__measurement1"/>
-<EntitySet Name="internal__measurement__sp__with__sp__spaces" EntityType="InfluxDBSchema.internal__measurement__sp__with__sp__spaces"/>
+<EntitySet Name="internal__measurement_sp_with_sp_spaces" EntityType="InfluxDBSchema.internal__measurement_sp_with_sp_spaces"/>
 <EntitySet Name="database1__measurement1" EntityType="InfluxDBSchema.database1__measurement1"/>
-<EntitySet Name="database1__measurement__sp__with__sp__spaces" EntityType="InfluxDBSchema.database1__measurement__sp__with__sp__spaces"/>
+<EntitySet Name="database1__measurement_sp_with_sp_spaces" EntityType="InfluxDBSchema.database1__measurement_sp_with_sp_spaces"/>
     </EntityContainer>
     <EntityType Name="internal__measurement1"><Key><PropertyRef Name="timestamp" /></Key><Property Name="timestamp" Type="Edm.DateTime" Precision="6" Nullable="false" />
 <Property Name="float_field" Type="Edm.Double" Nullable="true" />
 <Property Name="tag1" Type="Edm.String" Nullable="true" />
 <Property Name="int_field" Type="Edm.Int64" Nullable="true" />
 <Property Name="tag2" Type="Edm.String" Nullable="true" /></EntityType>
-<EntityType Name="internal__measurement__sp__with__sp__spaces"><Key><PropertyRef Name="timestamp" /></Key><Property Name="timestamp" Type="Edm.DateTime" Precision="6" Nullable="false" />
+<EntityType Name="internal__measurement_sp_with_sp_spaces"><Key><PropertyRef Name="timestamp" /></Key><Property Name="timestamp" Type="Edm.DateTime" Precision="6" Nullable="false" />
 <Property Name="float_field" Type="Edm.Double" Nullable="true" />
 <Property Name="tag1" Type="Edm.String" Nullable="true" />
 <Property Name="int_field" Type="Edm.Int64" Nullable="true" />
@@ -28,7 +28,7 @@
 <Property Name="tag1" Type="Edm.String" Nullable="true" />
 <Property Name="int_field" Type="Edm.Int64" Nullable="true" />
 <Property Name="tag2" Type="Edm.String" Nullable="true" /></EntityType>
-<EntityType Name="database1__measurement__sp__with__sp__spaces"><Key><PropertyRef Name="timestamp" /></Key><Property Name="timestamp" Type="Edm.DateTime" Precision="6" Nullable="false" />
+<EntityType Name="database1__measurement_sp_with_sp_spaces"><Key><PropertyRef Name="timestamp" /></Key><Property Name="timestamp" Type="Edm.DateTime" Precision="6" Nullable="false" />
 <Property Name="float_field" Type="Edm.Double" Nullable="true" />
 <Property Name="tag1" Type="Edm.String" Nullable="true" />
 <Property Name="int_field" Type="Edm.Int64" Nullable="true" />

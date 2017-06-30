@@ -33,17 +33,19 @@ def get_edm_type(influx_type):
 
 def mangle_measurement_name(m_name):
     """corresponds to unmangle_measurement_name in influxdbds.py"""
-    m_name = m_name.replace(' ', '__sp__')
+    m_name = m_name.replace(' ', '_sp_')
+    m_name = m_name.replace('-', '_dsh_')
     return m_name
 
 
 def mangle_db_name(db_name):
     """corresponds to unmangle_db_name in influxdbds.py"""
-    return db_name.strip('_')  # edmx names cannot begin with '_'
+    db_name = db_name.strip('_')  # edmx names cannot begin with '_'
+    db_name = db_name.replace('-', '_dsh_')
+    return db_name
 
 
 def db_name__measurement_name(db_name, m_name):
-    m_name = m_name.replace(' ', '__sp__')
     return '{}__{}'.format(
         mangle_db_name(db_name),
         mangle_measurement_name(m_name)
@@ -134,4 +136,3 @@ def generate_metadata(dsn):
     {}
     {}""".format(xml_head, '\n'.join(entity_sets), '\n'.join(entity_types), xml_foot)
     return output
-
