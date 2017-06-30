@@ -139,9 +139,22 @@ class TestInfluxOData(unittest.TestCase):
         self.assertEqual(where, u"WHERE prop = 'test'", msg="Correct where clause for eq operator")
         where = where_clause_from_string(u"prop gt 0")
         self.assertEqual(where, u"WHERE prop > 0", msg="Correct where clause for gt operator (Int)")
+        where = where_clause_from_string(u"prop ge 0")
+        self.assertEqual(where, u"WHERE prop >= 0", msg="Correct where clause for ge operator (Int)")
+        where = where_clause_from_string(u"prop lt 0")
+        self.assertEqual(where, u"WHERE prop < 0", msg="Correct where clause for lt operator (Int)")
+        where = where_clause_from_string(u"prop le 0")
+        self.assertEqual(where, u"WHERE prop <= 0", msg="Correct where clause for le operator (Int)")
         where = where_clause_from_string(u"prop gt -32.53425D")
         self.assertEqual(where, u"WHERE prop > -32.53425", msg="Correct where clause for eq operator (Float)")
+        where = where_clause_from_string(u"timestamp ge datetime'2016-01-01T00:00:00' and timestamp le datetime'2016-12-31T00:00:00'")
+        self.assertEqual(where, u"WHERE time >= '2016-01-01 00:00:00' AND time <= '2016-12-31 00:00:00'")
         collection.close()
+
+    def test_groupby_expression(self):
+        first_feed = next(self._container.itervalues())
+        collection = first_feed.OpenCollection()
+        self.assertEqual(collection._groupby_expression(), '')
 
     def test_limit_expression(self):
         first_feed = next(self._container.itervalues())
@@ -180,12 +193,14 @@ class TestInfluxOData(unittest.TestCase):
             re_limit_offset = re.compile('.*q=SELECT\+%2A\+FROM\+%22measurement1.*LIMIT\+200\+OFFSET\+200&')
             rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
                     json=json_count(collection.name), match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
+                    json=json_count(collection.name), match_querystring=True)
             rsp.add(rsp.GET, re_limit,
                     json=json_points_list('measurement1', page_size=page_size), match_querystring=True)
-            rsp.add(rsp.GET, re.compile('.*q=SHOW\+FIELD\+KEYS.*'),
-                    json=json_field_keys, match_querystring=True)
-            rsp.add(rsp.GET, re.compile('.*q=SHOW\+TAG\+KEYS.*'),
-                    json=json_tag_keys, match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
+                    json=json_count(collection.name), match_querystring=True)
+            rsp.add(rsp.GET, re.compile('.*SELECT\+COUNT.*'),
+                    json=json_count(collection.name), match_querystring=True)
             rsp.add(rsp.GET, re_limit_offset,
                     json=json_points_list('measurement1', page_size=page_size), match_querystring=True)
 
@@ -200,10 +215,6 @@ class TestInfluxOData(unittest.TestCase):
             with RequestsMock() as rsp:
                 rsp.add(rsp.GET, re.compile('.*q=SELECT\+%2A\+FROM\+%22measurement1%22&'),
                         json=json_points_list(collection.name), match_querystring=True)
-                rsp.add(rsp.GET, re.compile('.*q=SHOW\+FIELD\+KEYS.*'),
-                        json=json_field_keys, match_querystring=True)
-                rsp.add(rsp.GET, re.compile('.*q=SHOW\+TAG\+KEYS.*'),
-                        json=json_tag_keys, match_querystring=True)
 
                 for e in collection._generate_entities():
                     self.assertIsInstance(e, core.Entity)
