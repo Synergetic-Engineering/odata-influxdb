@@ -54,7 +54,7 @@ def db_name__measurement_name(db_name, m_name):
 
 class InfluxDB(object):
     def __init__(self, dsn):
-        self.client = InfluxDBClient.from_DSN(dsn)
+        self.client = InfluxDBClient.from_dsn(dsn)
 
     def fields(self, db_name):
         """returns a tuple of dicts where each dict has attributes (name, type, edm_type)"""
